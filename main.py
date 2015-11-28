@@ -9,6 +9,20 @@ from random import randint
 win_header = 'view window'
 cv2.namedWindow(win_header, cv2.WINDOW_NORMAL)
 
+def process(frame, mask, rows, cols):
+
+    # Apply MASK.
+    result = cv2.bitwise_and(frame, frame, mask=mask)
+
+    # Scale 
+
+    # Rotate image 90 CCW
+    M = cv2.getRotationMatrix2D((cols/2,rows/2),90,1)
+    result = cv2.warpAffine(result,M,(cols,rows))
+
+    return result
+
+
 cap = cv2.VideoCapture(0)
 
 # Define the codec and create VideoWriter object
@@ -18,18 +32,29 @@ out = cv2.VideoWriter('output.avi',fourcc, 20.0, (640,480))
 while(cap.isOpened()):
     ret, frame = cap.read()
     if ret==True:
-        #frame = cv2.flip(frame,0)
 
-        img = np.zeros((480, 640, 3), np.uint8)
+        rows, cols = frame.shape[:2]
+        print(rows, cols)
 
-        p1 = [320, 120]#[randint(120, 200), randint(200, 300)]
-        p2 = [160, 360]#[randint(100, 200), randint(200, 300)]
-        p3 = [480, 360]#[randint(100, 200), randint(200, 300)]
+        ###### CREATE MASK ######
+        # Create a black image
+        img = np.zeros((rows, cols, 3), np.uint8)
 
+        p1 = [cols/2, 0]
+        p2 = [0, rows]
+        p3 = [cols, rows]
         pts = np.array([p1,p2,p3], np.int32)
-        pts = pts.reshape((-1,1,2))
+        #pts = pts.reshape((-1,1,2))
 
-        frame = cv2.polylines(frame,[pts],True,(0,255,255))
+        mask = cv2.fillConvexPoly(img, pts, (255,255,255), 1)
+        #show(mask)
+        mask2gray = cv2.cvtColor(mask,cv2.COLOR_BGR2GRAY)
+        
+        ret, mask = cv2.threshold(mask2gray, 10, 255, cv2.THRESH_BINARY)
+
+        frame = process(frame, mask, rows, cols)
+
+        #frame = cv2.flip(frame,0)
 
         # write the frame
         out.write(frame)
@@ -44,64 +69,3 @@ while(cap.isOpened()):
 cap.release()
 out.release()
 cv2.destroyAllWindows()
-
-'''
-############################################################
-cap = cv2.VideoCapture('tree.avi')
-
-while(cap.isOpened()):
-    ret, frame = cap.read()
-
-    gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
-
-    cv2.imshow('frame',gray)
-    if cv2.waitKey(1) & 0xFF == ord('q'):
-        break
-
-cap.release()
-cv2.destroyAllWindows()
-
-
-############################################################
-cap = cv2.VideoCapture(0)
-
-if not cap.isOpened():
-    cap.open()
-
-while(True):
-    # Capture frame-by-frame
-    ret, frame = cap.read()
-
-    # Our operations on the frame come here
-    gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
-
-    # Display the resulting frame
-    cv2.imshow('frame',gray)
-    if cv2.waitKey(1) & 0xFF == ord('q'):
-        break
-
-# When everything done, release the capture
-cap.release()
-cv2.destroyAllWindows()
-
-
-##########################################################
-win_header = 'view window'
-img = cv2.imread('lena.jpg', 0)
-
-plt.imshow(img, cmap = 'gray', interpolation = 'bicubic')
-plt.xticks([]), plt.yticks([])
-plt.show()
-
-############################
-
-cv2.namedWindow(win_header, cv2.WINDOW_NORMAL)
-cv2.imshow(win_header, img)
-k = cv2.waitKey(0) & 0xFF
-
-if k == 27:     # ESC key
-    cv2.destroyWindow(win_header)
-elif k == ord('s'):
-    cv2.imwrite('lena_mod.png',img)
-    cv2.destroyAllWindows()
-'''
