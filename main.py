@@ -4,14 +4,15 @@ from __future__ import division
 
 import numpy as np
 import cv2
+
+from math import cos
+from math import sin
+from math import pi
 from random import randint
 from matplotlib import pyplot as plt
 
-win_header = 'view window'
-cv2.namedWindow(win_header, cv2.WINDOW_NORMAL)
 
 def show(img):
-    #print(img.shape)
     cv2.imshow(win_header, img)
 
     k = cv2.waitKey(0) & 0xFF
@@ -24,71 +25,94 @@ def show_plt(img):
     #plt.xticks([]), plt.yticks([])
     plt.show()
 
-def create_masks(height, width):
-    '''Creates two mask shapes
+def create_mask(height, width):
+    '''Creates mask for BOTTOM element
     Args:
         height: original image HEIGHT
         width: original image WIDTH
     Return:
-        mask_top_bottom: top and bottom rectangles mask
-        mask_left_right: left and right rectangles mask
+        mask: BOTTOM mask
     '''
-    # Scaled up 200%
-    height_2x = height
-    width_2x = width
-
-    # Set TOP_BOTTOM mask points
-    top_pt = [0.5 * width_2x, 0]
-    left_pt = [- (0.5 * width_2x), height_2x]
-    right_pt = [width_2x*1.5, height_2x]
-    top_bottom_mask = mask(height_2x, width_2x, top_pt, left_pt, right_pt)
-    #show(top_bottom_mask)
-    # Set TOP_BOTTOM mask points
-    top_pt = [0.5 * width_2x, 0]
-    left_pt = [width_2x, -1/3 * height_2x]
-    right_pt = [width_2x, 5/3 * height_2x]
-    left_right_mask = mask(height_2x, width_2x, top_pt, left_pt, right_pt)
-    #show(left_right_mask)
-    return top_bottom_mask, left_right_mask
-
-def mask(height_2x, width_2x, top_pt, left_pt, right_pt):
-    '''Creates triangle mask from 3x points
-    Args:
-        top_pt
-        left_pt
-        right_pt
-    Return:
-        mask
-    '''
-    print(top_pt, left_pt, right_pt)
-    mask = np.zeros((height_2x, width_2x, 3), np.uint8)
-    show_plt(mask)
+    # Set BOTTOM mask points
+    top_pt = [width / 2, 0]
+    left_pt = [-1/2 * width, height]
+    right_pt = [3/2 * width, height]
     pts = np.array([top_pt, left_pt, right_pt], np.int32)
+    # Black image
+    mask = np.zeros((height, width, 3), np.uint8)
     #pts = pts.reshape((-1,1,2))
+    # Create traiangle
     mask = cv2.fillConvexPoly(mask, pts, (255,255,255), 1)
-    show_plt(mask)
-    mask2grey = cv2.cvtColor(mask,cv2.COLOR_BGR2GRAY)
-    ret, mask = cv2.threshold(mask2grey, 10, 255, cv2.THRESH_BINARY)
-    show(mask)
-    return mask
-
-def crop_triangles(frame, mask, height, width):
-    '''Crop triangels by mask
-    '''
-    # Apply MASK. ???????
-
-    result = cv2.bitwise_and(frame, frame, mask=mask)
-
-    # Scale down 
-    #print(height, width)
-    result = cv2.resize(result, (height//2, width//2), interpolation = cv2.INTER_CUBIC)
-
-    # Rotate image 90 CCW
-    #M = cv2.getRotationMatrix2D((width/2,height/2),90,1)
-    #result = cv2.warpAffine(result,M,(width,height))
-
+    # Convert to GRAY
+    result = cv2.cvtColor(mask,cv2.COLOR_BGR2GRAY)
+    #ret, result = cv2.threshold(mask2grey, 10, 255, cv2.THRESH_BINARY)
     return result
 
+def crop_mask(img, mask):
+    '''Applies mask to image
+    '''
+    return cv2.bitwise_and(img, img, mask=mask)
+
+def scale(img, ratio):
+    '''Uniform scale
+    '''
+    return cv2.resize(img,None,fx=ratio, fy=ratio, \
+                      interpolation = cv2.INTER_CUBIC)
+
+def rotate(img, angle, anchor_x, anchor_y):
+    '''Rotates image about anchor point
+    Args:
+
+    Returns:
+
+    '''
+    height, width = img.shape[:2]
+    M = cv2.getRotationMatrix2D((anchor_x, anchor_y), angle, 1)
+    result = cv2.warpAffine(img, M, (width, height))
+    return result
+
+def rotate_pt(x ,y, angle_degree, anchor_x=0, anchor_y=0):
+    '''Rotate point by anchor
+    Agrs: 
+        x: coordinate
+        y: coordinate
+        angle: in DEGREES
+    Returns:
+        (x', y'): rotated coordinates
+    '''
+    angle = angle_degree * pi / 180    # Convert from degrees to radians
+    x2 = ((x - anchor_x) * cos(angle)) - ((y - anchor_y) * sin(angle)) + anchor_x
+    y2 = ((x - anchor_x) * sin(angle)) + ((y - anchor_y) * cos(angle)) + anchor_y
+
+    return x2, y2
+
+def add(window):
+    global screen
+    global scr_height, scr_width
+
+    w_height, w_width = window.shape[:2]
+
+    # TOP LH Corner of BOTTOM image on SCREEN (ROI coordinates)
+    y = scr_height / 2
+    x = scr_width / 2 - w_width/2  # scr_height = scr_width
+
+    # Create ROI for (y : y + b_height, x : x + b_width) region
+    roi = screen[y : y + w_height, x : x + w_width]
+    #### Apply mask & mask_inverse to ROI ###
+
+    # Black-out the area of window in ROI
+    roi_bg = crop_mask(roi, mask_inv)
+
+    # Add WINDOW to ROI
+    dst = cv2.add(roi_bg, window)
+    # Apply ROI to SCREEN
+    screen[y : y + w_height, x : x + w_width] = dst
+    #show_plt(screen)
+    return 1
+
+
+win_header = 'view window'
+cv2.namedWindow(win_header, cv2.WINDOW_NORMAL)
 
 cap = cv2.VideoCapture(0)
 # Get image dimensions ( HIGH x WIDTH )
@@ -96,27 +120,40 @@ cap = cv2.VideoCapture(0)
 height = int(cap.get(4))
 width = int(cap.get(3))
 # Define the codec and create VideoWriter object
-#fourcc = cv2.VideoWriter_fourcc(*'XVID')
-#out = cv2.VideoWriter('output.avi',fourcc, 20.0, (640,480))
+fourcc = cv2.VideoWriter_fourcc(*'XVID')
+out = cv2.VideoWriter('output.avi',fourcc, 20.0, (height * 2, height * 2))
 
 # CREATE MASKs 
-top_bottom_mask, left_right_mask = create_masks(height, width)
+
 
 
 while(cap.isOpened()):
     ret, frame = cap.read()
     if ret==True:
  
-        top_bottom = crop_triangles(frame, top_bottom_mask, height, width)
-        left_right = crop_triangles(frame, left_right_mask, height, width)
+        # Create mask, mask_inv
+        mask = create_mask(height, width)
+        mask_inv = cv2.bitwise_not(mask)
 
-        #frame = cv2.flip(frame,0)
+        # Create BOTTOM projection (flip + apply mask)
+        projection = crop_mask(cv2.flip(frame, 0), mask)
 
-        # write the frame
-        #out.write(frame)
+        # Create SCREEN. 2 * Height - length of side.
+        screen = np.zeros((height * 2, height * 2, 3), np.uint8)
+        scr_height, scr_width = screen.shape[:2]
+
+        #print(screen.shape)
+        #print(projection.shape)
+
+        for i in range(4):
+            add(projection)    
+            screen = rotate(screen, -90, scr_height / 2, scr_width / 2)
+
+        # write the screen
+        #out.write(screen)
 
         #cv2.imshow(win_header,left_right)
-        #cv2.imshow(win_header,frame)
+        cv2.imshow(win_header, screen)
         if cv2.waitKey(1) & 0xFF == ord('q'):
             break
     else:
@@ -124,5 +161,5 @@ while(cap.isOpened()):
 
 # Release everything if job is finished
 cap.release()
-#out.release()
+out.release()
 cv2.destroyAllWindows()

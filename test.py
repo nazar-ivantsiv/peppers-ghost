@@ -86,17 +86,18 @@ def rotate_pt(x ,y, angle_degree, anchor_x=0, anchor_y=0):
 
     return x2, y2
 
-def add_window(window):
+def add(window):
     global screen
     global scr_height, scr_width
 
-    b_height, b_width = window.shape[:2]
+    w_height, w_width = window.shape[:2]
 
     # TOP LH Corner of BOTTOM image on SCREEN (ROI coordinates)
-    x = scr_width / 4
     y = scr_height / 2
+    x = scr_width / 2 - w_width/2  # scr_height = scr_width
+
     # Create ROI for (y : y + b_height, x : x + b_width) region
-    roi = screen[y:y + b_width, x:x + b_height]
+    roi = screen[y : y + w_height, x : x + w_width]
     #### Apply mask & mask_inverse to ROI ###
 
     # Black-out the area of window in ROI
@@ -105,7 +106,8 @@ def add_window(window):
     # Add WINDOW to ROI
     dst = cv2.add(roi_bg, window)
     # Apply ROI to SCREEN
-    screen[y : y + b_height, x : x + b_width] = dst
+    screen[y : y + w_height, x : x + w_width] = dst
+    #show_plt(screen)
     return 1
 
 win_header = 'view window'
@@ -119,22 +121,22 @@ img = cv2.imread('lena.jpg')
 height, width, channels = img.shape
 
 
-# Apply mask, mask_inv, create bottom window
+# Create mask, mask_inv
 mask = create_mask(height, width)
 mask_inv = cv2.bitwise_not(mask)
-window = cv2.flip(img, 0)
-window = crop_mask(window, mask)
+
+# Create BOTTOM projection (flip + apply mask)
+projection = crop_mask(cv2.flip(img, 0), mask)
 
 # Create SCREEN. 2 * Height - length of side.
-screen = np.zeros((height * 2, width * 2, 3), np.uint8)
-#show_plt(screen)
+screen = np.zeros((height * 2, height * 2, 3), np.uint8)
 scr_height, scr_width = screen.shape[:2]
 
-print(screen.shape)
-print(window.shape)
+#print(screen.shape)
+#print(projection.shape)
 
 for i in range(4):
-    add_window(window)    
+    add(projection)    
     screen = rotate(screen, -90, scr_height / 2, scr_width / 2)
 
 show(screen)
