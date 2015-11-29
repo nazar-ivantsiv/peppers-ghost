@@ -32,15 +32,15 @@ def create_masks(height, width):
     '''
     # Set TOP_BOTTOM mask points
     top_pt = [width / 2, 0]
-    left_pt = [- (width / 2), height]
-    right_pt = [width * 1.5, height]
+    left_pt = [0, height / 2]
+    right_pt = [width, height / 2]
     pts = np.array([top_pt, left_pt, right_pt], np.int32)
     top_bottom_mask = mask(height, width, pts)
 
     # Set TOP_BOTTOM mask points
-    top_pt = [width / 2 , 0]
-    left_pt = [width - height, width]    #????!!!!
-    right_pt = [(width - height) + height * 2, width]   #????!!!!
+    top_pt = [width / 2, 0]
+    left_pt = [(width - height) / 2, width / 2]
+    right_pt = [(width - height) / 2 + height, width / 2]
     pts = np.array([top_pt, left_pt, right_pt], np.int32)
     left_right_mask = mask(height, width, pts)
 
