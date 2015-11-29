@@ -1,5 +1,6 @@
 import cv2
 import numpy as np
+from matplotlib import pyplot as plt
 
 def show(img):
     cv2.imshow(win_header, img)
@@ -9,54 +10,18 @@ def show(img):
     if k == 27:     # ESC key
         cv2.destroyWindow(win_header)
 
-win_header = 'view window'
-cv2.namedWindow(win_header, cv2.WINDOW_NORMAL)
+def show_plt(img):
+    plt.imshow(img, cmap = 'gray', interpolation = 'bicubic')
+    #plt.xticks([]), plt.yticks([])
+    plt.show()
 
-# Load two images
-img1 = cv2.imread('me.jpg')
-rows, cols, channel = img1.shape
+def scale(img, ratio):
+    return cv2.resize(img,None,fx=ratio, fy=ratio, interpolation = cv2.INTER_CUBIC)
 
-# I want to put logo on top-left corner, So I create a ROI
+#win_header = 'view window'
+#cv2.namedWindow(win_header, cv2.WINDOW_NORMAL)
 
-# Now create a mask of logo and create its inverse mask also
-# Create a black image
-img = np.zeros((rows, cols, 3), np.uint8)
+img = cv2.imread('lena.jpg')
+height, width, channel = img.shape
 
-#p1 = [320, 120]#[randint(120, 200), randint(200, 300)]
-#p2 = [160, 360]#[randint(100, 200), randint(200, 300)]
-#p3 = [480, 360]#[randint(100, 200), randint(200, 300)]
-
-p1 = [cols/2, 0]
-p2 = [0, rows]
-p3 = [cols, rows]
-
-pts = np.array([p1,p2,p3], np.int32)
-#pts = pts.reshape((-1,1,2))
-
-mask = cv2.fillConvexPoly(img, pts, (255,255,255), 1)
-#mask_inv = cv2.bitwise_not(mask)
-#show(mask)
-
-
-
-mask2gray = cv2.cvtColor(mask,cv2.COLOR_BGR2GRAY)
-ret, mask = cv2.threshold(mask2gray, 10, 255, cv2.THRESH_BINARY)
-mask_inv = cv2.bitwise_not(mask)
-#show(mask_inv)
-
-print(img1.dtype)
-print(mask_inv.dtype)
-
-# Now black-out the area of logo in ROI
-#img1_bg = cv2.bitwise_and(img1,img1,mask = mask)
-#show(img_bg)
-
-# Take only region of logo from logo image.
-img1_fg = cv2.bitwise_and(img1, img1, mask=mask)
-#show(img1_fg)
-
-#show(img2_fg)
-# Put logo in ROI and modify the main image
-#dst = cv2.add(img1,mask)
-
-show(img1_fg)
+show_plt(scale(img, 0.5))
