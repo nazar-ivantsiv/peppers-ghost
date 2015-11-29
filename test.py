@@ -44,12 +44,12 @@ def create_mask(height, width):
     # Create traiangle
     mask = cv2.fillConvexPoly(mask, pts, (255,255,255), 1)
     # Convert to GRAY
-    mask2grey = cv2.cvtColor(mask,cv2.COLOR_BGR2GRAY)
-    ret, result = cv2.threshold(mask2grey, 10, 255, cv2.THRESH_BINARY)
-    return cv2.flip(result, 0)
+    result = cv2.cvtColor(mask,cv2.COLOR_BGR2GRAY)
+    #ret, result = cv2.threshold(mask2grey, 10, 255, cv2.THRESH_BINARY)
+    return result
 
-def crop_triangle(img, mask):
-    '''Crop triangel by mask
+def crop_mask(img, mask):
+    '''Applies mask to image
     '''
     return cv2.bitwise_and(img, img, mask=mask)
 
@@ -61,11 +61,13 @@ def scale(img, ratio):
 
 def rotate(img, angle, anchor_x, anchor_y):
     '''Rotates image about anchor point
+    Args:
+
+    Returns:
+
     '''
     height, width = img.shape[:2]
-
     M = cv2.getRotationMatrix2D((anchor_x, anchor_y), angle, 1)
-    print(M)
     result = cv2.warpAffine(img, M, (width, height))
     return result
 
@@ -84,49 +86,58 @@ def rotate_pt(x ,y, angle_degree, anchor_x=0, anchor_y=0):
 
     return x2, y2
 
-def add(img1, img2):
-    pass
+def add_window(window):
+    global screen
+    global scr_height, scr_width
+
+    b_height, b_width = window.shape[:2]
+
+    # TOP LH Corner of BOTTOM image on SCREEN (ROI coordinates)
+    x = scr_width / 4
+    y = scr_height / 2
+    # Create ROI for (y : y + b_height, x : x + b_width) region
+    roi = screen[y:y + b_width, x:x + b_height]
+    #### Apply mask & mask_inverse to ROI ###
+
+    # Black-out the area of window in ROI
+    roi_bg = crop_mask(roi, mask_inv)
+
+    # Add WINDOW to ROI
+    dst = cv2.add(roi_bg, window)
+    # Apply ROI to SCREEN
+    screen[y : y + b_height, x : x + b_width] = dst
+    return 1
 
 win_header = 'view window'
 cv2.namedWindow(win_header, cv2.WINDOW_NORMAL)
 
 #img = cv2.imread('aero3.jpg')
 img = cv2.imread('lena.jpg')
+
 # Get image dimensions ( HIGH x WIDTH )
 # 480 x 640
 height, width, channels = img.shape
 
+
+# Apply mask, mask_inv, create bottom window
 mask = create_mask(height, width)
+mask_inv = cv2.bitwise_not(mask)
+window = cv2.flip(img, 0)
+window = crop_mask(window, mask)
 
-top = crop_triangle(img, mask)
-bottom = cv2.flip(top, 0)
-
-# 2 * Height - length of side of new RECTANGLE
+# Create SCREEN. 2 * Height - length of side.
 screen = np.zeros((height * 2, width * 2, 3), np.uint8)
 #show_plt(screen)
+scr_height, scr_width = screen.shape[:2]
 
 print(screen.shape)
-print(bottom.shape)
+print(window.shape)
 
-scr_height, scr_width = screen.shape[:2]
-b_height, b_width = bottom.shape[:2]
+for i in range(4):
+    add_window(window)    
+    screen = rotate(screen, -90, scr_height / 2, scr_width / 2)
 
-# TOP LH Corner of BOTTOM image on SCREEN (ROI coordinates
-x = scr_width / 4
-y = scr_height / 2
-
-# Create ROI for (y : y + b_height, x : x + b_width) region
-# Apply mask & mask_inverse to ROI
-# ADD
-
-# Apply ROI to SCREEN
-screen[y : y + b_height, x : x + b_width] = bottom
-
-
-
-screen = rotate(screen, -90, scr_height / 2, scr_width / 2)
-
-show_plt(screen)
+show(screen)
 
 #if cv2.waitKey(1) & 0xFF == ord('q'):
 #    cv2.destroyAllWindows()
