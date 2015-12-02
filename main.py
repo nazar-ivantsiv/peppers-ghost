@@ -125,7 +125,7 @@ out = cv2.VideoWriter('output.avi',fourcc, 20.0, (height * 2, height * 2))
 
 # CREATE MASKs 
 
-
+# Add variables to change p
 
 while(cap.isOpened()):
     ret, frame = cap.read()
@@ -150,7 +150,7 @@ while(cap.isOpened()):
             screen = rotate(screen, -90, scr_height / 2, scr_width / 2)
 
         # write the screen
-        #out.write(screen)
+        out.write(screen)
 
         #cv2.imshow(win_header,left_right)
         cv2.imshow(win_header, screen)
