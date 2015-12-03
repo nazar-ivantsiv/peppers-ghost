@@ -12,154 +12,218 @@ from random import randint
 from matplotlib import pyplot as plt
 
 
-def show(img):
-    cv2.imshow(win_header, img)
-
-    k = cv2.waitKey(0) & 0xFF
-
-    if k == 27:     # ESC key
-        cv2.destroyWindow(win_header)
-
-def show_plt(img):
-    plt.imshow(img, cmap = 'gray', interpolation = 'bicubic')
-    #plt.xticks([]), plt.yticks([])
-    plt.show()
-
-def create_mask(height, width):
-    '''Creates mask for BOTTOM element
+class Ghost(object):
+    '''Pepper's Ghost video processor. 
+    Creates pyramid like projection of input video (camera or file), ready to
+    project on pseudo holographic pyramid.
     Args:
-        height: original image HEIGHT
-        width: original image WIDTH
-    Return:
-        mask: BOTTOM mask
-    '''
-    # Set BOTTOM mask points
-    top_pt = [width / 2, 0]
-    left_pt = [-1/2 * width, height]
-    right_pt = [3/2 * width, height]
-    pts = np.array([top_pt, left_pt, right_pt], np.int32)
-    # Black image
-    mask = np.zeros((height, width, 3), np.uint8)
-    #pts = pts.reshape((-1,1,2))
-    # Create traiangle
-    mask = cv2.fillConvexPoly(mask, pts, (255,255,255), 1)
-    # Convert to GRAY
-    result = cv2.cvtColor(mask,cv2.COLOR_BGR2GRAY)
-    #ret, result = cv2.threshold(mask2grey, 10, 255, cv2.THRESH_BINARY)
-    return result
-
-def crop_mask(img, mask):
-    '''Applies mask to image
-    '''
-    return cv2.bitwise_and(img, img, mask=mask)
-
-def scale(img, ratio):
-    '''Uniform scale
-    '''
-    return cv2.resize(img,None,fx=ratio, fy=ratio, \
-                      interpolation = cv2.INTER_CUBIC)
-
-def rotate(img, angle, anchor_x, anchor_y):
-    '''Rotates image about anchor point
-    Args:
-
+        source: video camera or file
     Returns:
 
     '''
-    height, width = img.shape[:2]
-    M = cv2.getRotationMatrix2D((anchor_x, anchor_y), angle, 1)
-    result = cv2.warpAffine(img, M, (width, height))
-    return result
+    def __init__(self, source=0):
+        '''Args:
+            source: camera (0, 1) or vieofile (file.avi)
+        '''
+        self.source = source
+        self.win_header = 'Peper\'s Ghost'
+        self._cap = cv2.VideoCapture(self.source)
+        if not self._cap.isOpened():
+            self._cap.open()
 
-def rotate_pt(x ,y, angle_degree, anchor_x=0, anchor_y=0):
-    '''Rotate point by anchor
-    Agrs: 
-        x: coordinate
-        y: coordinate
-        angle: in DEGREES
-    Returns:
-        (x', y'): rotated coordinates
-    '''
-    angle = angle_degree * pi / 180    # Convert from degrees to radians
-    x2 = ((x - anchor_x) * cos(angle)) - ((y - anchor_y) * sin(angle)) + anchor_x
-    y2 = ((x - anchor_x) * sin(angle)) + ((y - anchor_y) * cos(angle)) + anchor_y
+        self._out = None
+        self.height = int(self._cap.get(4))
+        self.width = int(self._cap.get(3))
 
-    return x2, y2
+        self.pyramid_size = self.height * 2
 
-def add(window):
-    global screen
-    global scr_height, scr_width
+        self.screen = np.zeros((self.pyramid_size, self.pyramid_size, 3), \
+                                  np.uint8)
+        self.scr_centre = self.pyramid_size /2
 
-    w_height, w_width = window.shape[:2]
+        self.mask = self._create_mask(centre=0.5)
 
-    # TOP LH Corner of BOTTOM image on SCREEN (ROI coordinates)
-    y = scr_height / 2
-    x = scr_width / 2 - w_width/2  # scr_height = scr_width
+        self.mask_inv = cv2.bitwise_not(self.mask)
 
-    # Create ROI for (y : y + b_height, x : x + b_width) region
-    roi = screen[y : y + w_height, x : x + w_width]
-    #### Apply mask & mask_inverse to ROI ###
-
-    # Black-out the area of window in ROI
-    roi_bg = crop_mask(roi, mask_inv)
-
-    # Add WINDOW to ROI
-    dst = cv2.add(roi_bg, window)
-    # Apply ROI to SCREEN
-    screen[y : y + w_height, x : x + w_width] = dst
-    #show_plt(screen)
-    return 1
+        #self._show_plt(self.mask)
 
 
-win_header = 'view window'
-cv2.namedWindow(win_header, cv2.WINDOW_NORMAL)
+    def run(self):
+        '''Starts video processor.
+        '''
+        cv2.namedWindow(self.win_header, cv2.WINDOW_NORMAL)
+        # Remember to check if the output is initialized.
 
-cap = cv2.VideoCapture(0)
-# Get image dimensions ( HIGH x WIDTH )
-# 480 x 640
-height = int(cap.get(4))
-width = int(cap.get(3))
-# Define the codec and create VideoWriter object
-fourcc = cv2.VideoWriter_fourcc(*'XVID')
-out = cv2.VideoWriter('output.avi',fourcc, 20.0, (height * 2, height * 2))
+        cap = self._cap
+        while(cap.isOpened()):
+            ret, frame = cap.read()
+            if ret == True:
+                # PUT MASK ASSIGNMENT HERE TO HAVE INTERACTION
 
-# CREATE MASKs 
+                # Create BOTTOM projection (flip + apply mask)
+                projection = self._apply_mask(frame, self.mask)
 
-# Add variables to change p
+                # Create empty SCREEN. !!! BAD !!! Move OUT of cycle???
+                self.screen = np.zeros((self.pyramid_size, self.pyramid_size,\
+                                         3), np.uint8)
 
-while(cap.isOpened()):
-    ret, frame = cap.read()
-    if ret==True:
- 
-        # Create mask, mask_inv
-        mask = create_mask(height, width)
-        mask_inv = cv2.bitwise_not(mask)
+                #print(screen.shape)
+                #print(projection.shape)
 
-        # Create BOTTOM projection (flip + apply mask)
-        projection = crop_mask(cv2.flip(frame, 0), mask)
+                for i in range(4):
+                    self._add(projection)    
+                    self.screen = self._rotate(self.screen, -90, \
+                                           self.scr_centre, self.scr_centre)
 
-        # Create SCREEN. 2 * Height - length of side.
-        screen = np.zeros((height * 2, height * 2, 3), np.uint8)
-        scr_height, scr_width = screen.shape[:2]
+                if self._out != None:
+                    self._out.write(self.screen)
 
-        #print(screen.shape)
-        #print(projection.shape)
+                #cv2.imshow(win_header,left_right)
+                cv2.imshow(self.win_header, self.screen)
+                if cv2.waitKey(1) & 0xFF == ord('q'):
+                    break
+            else:
+                break
 
-        for i in range(4):
-            add(projection)    
-            screen = rotate(screen, -90, scr_height / 2, scr_width / 2)
 
-        # write the screen
-        out.write(screen)
+        self.stop()
 
-        #cv2.imshow(win_header,left_right)
-        cv2.imshow(win_header, screen)
-        if cv2.waitKey(1) & 0xFF == ord('q'):
-            break
-    else:
-        break
+    def set_output(file_path):
+        '''Define the codec and create VideoWriter object to output video.
+        Args:
+            file_path: filename or path to output file
+        '''
+        fourcc = cv2.VideoWriter_fourcc(*'XVID')
+        self._out = cv2.VideoWriter(file_path, fourcc, 20.0, \
+                                   (height * 2, height * 2))
 
-# Release everything if job is finished
-cap.release()
-out.release()
-cv2.destroyAllWindows()
+    def stop(self):
+        '''Release everything if job is finished. And close the window.
+        '''
+        self._cap.release()
+        if self._out != None:
+            self._out.release()
+        cv2.destroyAllWindows()
+
+    def _create_mask(self, scale_x=1, scale_y=1, centre=2, sharp=0.33):
+        '''Creates mask.
+        Args:
+            height: original image HEIGHT
+            width: original image WIDTH
+            scale_x: scale mask height
+            scale_y: scale mask width
+            centre: move mask centre by Y axis
+        Return:
+            mask: triangle mask
+        '''
+        # Set mask points
+        height = self.height
+        width = self.width
+        
+        centre_y = height / 2 + height / 2 * centre
+        centre_x = width / 2 
+
+        left_pt = [ (centre_x - width / 2) * scale_x, \
+                    (centre_y - height / 2) * scale_y]
+
+        right_pt = [(centre_x + width / 2) * scale_x, \
+                    (centre_y - height / 2) * scale_y]
+
+        bottom_pt = [centre_x, centre_y + (height / 2) * sharp]
+
+        pts = np.array([bottom_pt, left_pt, right_pt], np.int32)
+        # Black image
+        result = np.zeros((self.height, self.width, 3), np.uint8)
+        #pts = pts.reshape((-1,1,2))
+        # Create traiangle
+        result = cv2.fillConvexPoly(result, pts, (255,255,255), 1)
+        # Convert to GRAY
+        result = cv2.cvtColor(result,cv2.COLOR_BGR2GRAY)
+        #ret, result = cv2.threshold(mask2grey, 10, 255, cv2.THRESH_BINARY)
+        return result
+
+    def _add(self, window, blend=0.915):
+
+        w_height, w_width = window.shape[:2]
+
+        # CENTRE of SCREEN (ROI coordinates)
+        centre = self.pyramid_size / 2
+
+        y = centre - w_width / 2    
+        x = centre - w_height * blend
+
+        # Create ROI for (y : y + b_height, x : x + b_width) region
+        roi = self.screen[x : x + w_height, y : y + w_width]
+        #### Apply mask & mask_inverse to ROI ###
+        # Black-out the area of window in ROI
+        roi_bg = self._apply_mask(roi, self.mask_inv)
+
+        # Add WINDOW to ROI
+        #dst = cv2.add(cv2.bitwise_not(roi_bg), window)
+        dst = cv2.add(roi_bg, window)
+        # Apply ROI to SCREEN
+        self.screen[x : x + w_height, y : y + w_width] = dst
+        #self._show_plt(self.screen)
+
+    @staticmethod
+    def _show(img):
+        cv2.imshow(win_header, img)
+
+        k = cv2.waitKey(0) & 0xFF
+
+        if k == 27:     # ESC key
+            cv2.destroyWindow(win_header)
+
+    @staticmethod
+    def _show_plt(img):
+        plt.imshow(img, cmap = 'gray', interpolation = 'bicubic')
+        #plt.xticks([]), plt.yticks([])
+        plt.show()
+
+    @staticmethod
+    def _scale(img, ratio):
+        '''Uniform scale
+        '''
+        return cv2.resize(img,None,fx=ratio, fy=ratio, \
+                          interpolation = cv2.INTER_CUBIC)
+
+    @staticmethod
+    def _rotate(img, angle, anchor_x, anchor_y):
+        '''Rotates image about anchor point
+        Args:
+            img: image
+            angel: angle to rotate
+            anchor_x, anchor_y: anchor coordinates to rotate about.
+        Returns:
+            rotated image (no scaling)
+        '''
+        height, width = img.shape[:2]
+        M = cv2.getRotationMatrix2D((anchor_x, anchor_y), angle, 1)
+        result = cv2.warpAffine(img, M, (width, height))
+        return result    
+
+    @staticmethod
+    def _apply_mask(img, mask):
+        '''Applies mask to image
+        '''
+        return cv2.bitwise_and(img, img, mask=mask)
+
+    @staticmethod
+    def _rotate_pt(x ,y, angle_degree, anchor_x=0, anchor_y=0):
+        '''Rotate point by anchor
+        Agrs: 
+            x: coordinate
+            y: coordinate
+            angle: in DEGREES
+        Returns:
+            (x', y'): rotated coordinates
+        '''
+        angle = angle_degree * pi / 180    # Convert from degrees to radians
+        x2 = ((x - anchor_x) * cos(angle)) - ((y - anchor_y) * sin(angle)) + anchor_x
+        y2 = ((x - anchor_x) * sin(angle)) + ((y - anchor_y) * cos(angle)) + anchor_y
+
+        return x2, y2
+
+
+ghost = Ghost()
+ghost.run()
