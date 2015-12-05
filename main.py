@@ -47,8 +47,8 @@ class Ghost(object):
         '''Starts video processor.
         '''
         cv2.namedWindow(self.win_header, cv2.WINDOW_NORMAL)
-        fgbg = cv2.createBackgroundSubtractorMOG2(history = 500, \
-                                                  varThreshold = 16, \
+        fgbg = cv2.createBackgroundSubtractorMOG2(history = 1000, \
+                                                  varThreshold = 25, \
                                                   detectShadows = False)
 
         cap = self._cap
@@ -64,6 +64,14 @@ class Ghost(object):
                 #frame_inv = cv2.bitwise_not(frame)
 
                 fgmask = fgbg.apply(frame)
+
+                # Elliptical Kernel
+                kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE,(10, 10))
+                #kernel = np.ones((5, 5), np.uint8)
+                # Opening algorithm
+                #fgmask = cv2.morphologyEx(fgmask, cv2.MORPH_OPEN, kernel)
+                # Dilation alg
+                fgmask = cv2.dilate(fgmask, kernel, iterations = 3)
 
                 frame = self._apply_mask(frame, fgmask)
 
