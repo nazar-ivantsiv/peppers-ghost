@@ -4,6 +4,7 @@ from __future__ import division
 
 from random import randint
 from matplotlib import pyplot as plt
+from os import getcwd
 
 import numpy as np
 import cv2
@@ -47,9 +48,13 @@ class Ghost(object):
         '''Starts video processor.
         '''
         cv2.namedWindow(self.win_header, cv2.WINDOW_NORMAL)
-        fgbg = cv2.createBackgroundSubtractorMOG2(history = 1000, \
+        fgbg = cv2.createBackgroundSubtractorMOG2(history = 10000, \
                                                   varThreshold = 25, \
                                                   detectShadows = False)
+
+        #kernel = np.ones((5, 5), np.uint8)
+        # Elliptical Kernel
+        kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE,(5, 5))
 
         cap = self._cap
         #raw_input('Nobody in fronet of camera, only BACKGROUND?')
@@ -65,14 +70,13 @@ class Ghost(object):
 
                 fgmask = fgbg.apply(frame)
 
-                # Elliptical Kernel
-                kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE,(10, 10))
-                #kernel = np.ones((5, 5), np.uint8)
+                
                 # Opening algorithm
                 #fgmask = cv2.morphologyEx(fgmask, cv2.MORPH_OPEN, kernel)
                 # Dilation alg
                 fgmask = cv2.dilate(fgmask, kernel, iterations = 3)
-
+                # Closing
+                fgmask = cv2.morphologyEx(fgmask, cv2.MORPH_CLOSE, kernel)
                 frame = self._apply_mask(frame, fgmask)
 
                 projection = self._apply_mask(frame, self.mask)
@@ -104,14 +108,15 @@ class Ghost(object):
 
         self.stop()
 
-    def set_output(file_path):
+    def set_output(self, file_path):
         '''Define the codec and create VideoWriter object to output video.
         Args:
             file_path: filename or path to output file
         '''
+        print(file_path)
         fourcc = cv2.VideoWriter_fourcc(*'XVID')
         self._out = cv2.VideoWriter(file_path, fourcc, 20.0, \
-                                   (height * 2, height * 2))
+                            (self.height, self.width))
 
     def stop(self):
         '''Release everything if job is finished. And close the window.
@@ -229,4 +234,9 @@ class Ghost(object):
         return cv2.bitwise_and(img, img, mask=mask)
 
 ghost = Ghost()
+path = getcwd() + 'out1.avi'
+ghost.set_output(path)
+
 ghost.run()
+
+
