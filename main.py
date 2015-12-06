@@ -5,6 +5,8 @@ from __future__ import division
 from random import randint
 from matplotlib import pyplot as plt
 from os import getcwd
+import pdb
+import time
 
 import numpy as np
 import cv2
@@ -26,7 +28,7 @@ class Ghost(object):
             source: camera (0, 1) or vieofile (file.avi)
         '''
         self.source = source
-        self.win_header = 'Peper\'s Ghost'
+        self.h = 'SETTINGS'
         self._cap = cv2.VideoCapture(self.source)
         if not self._cap.isOpened():
             self._cap.open()
@@ -34,78 +36,102 @@ class Ghost(object):
         self.height = int(self._cap.get(4))
         self.width = int(self._cap.get(3))
         self.pyramid_size = self.height * 2
-        self.screen = np.zeros((self.pyramid_size, self.pyramid_size, 3), \
-                                  np.uint8)
         self.scr_centre = self.pyramid_size /2
-        self._create_mask()
 
-        #self._show_plt(self.mask)
+    def _init_run(self):
+        '''Initializes output and adjustments'''
+        def nothing(x):
+            pass
+        cv2.namedWindow(self.h, cv2.WINDOW_NORMAL)
+        cv2.namedWindow('screen', cv2.WINDOW_NORMAL)
+        # Create trackbars
+        cv2.createTrackbar('mask centre', self.h, int(self.MASK_CENTRE * 100),\
+                           100, nothing)
+        cv2.createTrackbar('mask bottom', self.h, int(self.MASK_BOTTOM * 100),\
+                           100, nothing)
+        cv2.createTrackbar('mask blend', self.h, int(self.MASK_BLEND * 1000),\
+                           1000, nothing)
+        cv2.createTrackbar('image x', self.h, int(self.width / 2), self.width, nothing)
+        cv2.createTrackbar('image y', self.h, int(self.height / 2), self.height, nothing)
+        cv2.createTrackbar('image scale', self.h, 10, 19, nothing)
+        cv2.createTrackbar('BS on/off', self.h, 0, 1, nothing)        
+        cv2.createTrackbar('kernel size', self.h, 5, 20, nothing)
+        cv2.createTrackbar('dilation iters', self.h, 3, 10, nothing)
 
-    def init(self):
-        '''Initialize main window'''
+
+    def _fg_mask(self, frame, fgbg, k_size, iters):
+        '''Background substraction
+        Args:
+            frame: 
+            fgbg: MOG2 instance
+            k_size: kernel size (for morphologyEx operations)
+            iters: number of iterations for Dilation
+        Returns:
+            fgmask: FOREGROUND mask
+        '''
+        # Elliptical Kernel for morphologyEx func
+        kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE,(k_size, k_size))
+        # Get FGMASK with MOG2
+        fgmask = fgbg.apply(frame)
+        # Dilation alg (increases white regions size)
+        fgmask = cv2.dilate(fgmask, kernel, iterations = iters)        
+        # Closing (remove black points from the object)
+        fgmask = cv2.morphologyEx(fgmask, cv2.MORPH_CLOSE, kernel)
+        # Fill Holes (flood fill the object)
+        fgmask = self._imfill_holes(cv2.bitwise_not(fgmask))       
+        return fgmask
 
     def run(self):
-        '''Starts video processor.
-        '''
-        cv2.namedWindow(self.win_header, cv2.WINDOW_NORMAL)
-        fgbg = cv2.createBackgroundSubtractorMOG2(history = 10000, \
+        '''Starts video processor.'''
+        self._init_run()
+        fgbg = cv2.createBackgroundSubtractorMOG2(history = 1000, \
                                                   varThreshold = 25, \
                                                   detectShadows = False)
-
-        #kernel = np.ones((5, 5), np.uint8)
-        # Elliptical Kernel
-        kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE,(5, 5))
-
-        cap = self._cap
-        #raw_input('Nobody in fronet of camera, only BACKGROUND?')
-        #background = cap.read()[1]
-        #self._show(background)
-
+        cap = self._cap      
         while(cap.isOpened()):
             ret, frame = cap.read()
             if ret == True:
-                # PUT MASK ASSIGNMENT HERE TO HAVE INTERACTION
+                # Get current positions of trackbars
+                m_cntr = cv2.getTrackbarPos('mask centre', self.h) / 100
+                m_btm = cv2.getTrackbarPos('mask bottom', self.h)  / 100
+                m_blnd = cv2.getTrackbarPos('mask blend', self.h) / 1000
+                i_x = cv2.getTrackbarPos('image x', self.h) - self.width / 2
+                i_y = cv2.getTrackbarPos('image y', self.h) - self.height / 2
+                i_scale = cv2.getTrackbarPos('image scale', self.h) / 10
+                print(i_scale)
+                BS_on = cv2.getTrackbarPos('BS on/off', self.h)
+                k_size = cv2.getTrackbarPos('kernel size', self.h) or 1
+                iters = cv2.getTrackbarPos('dilation iters', self.h)
 
-                #frame_inv = cv2.bitwise_not(frame)
+                if BS_on:
+                    fgmask = self._fg_mask(frame, fgbg, k_size, iters)
+                    frame = self._apply_mask(frame, fgmask)
+                if (i_x != 0)or(i_y != 0):
+                        frame = self._translate(frame, int(i_x), int(i_y))
+                if i_scale != 1:
+                    try:
+                        frame = self._scale(frame, int(i_scale))
+                    except Exception as err:
+                        print(err)
 
-                fgmask = fgbg.apply(frame)
-
-                
-                # Opening algorithm
-                #fgmask = cv2.morphologyEx(fgmask, cv2.MORPH_OPEN, kernel)
-                # Dilation alg
-                fgmask = cv2.dilate(fgmask, kernel, iterations = 3)
-                # Closing
-                fgmask = cv2.morphologyEx(fgmask, cv2.MORPH_CLOSE, kernel)
-                frame = self._apply_mask(frame, fgmask)
-
+                # Create/Apply triangle mask
+                self._create_mask(centre=m_cntr, bottom=m_btm)
                 projection = self._apply_mask(frame, self.mask)
-
-
-                #self._show(fgmask)
-                # Create empty SCREEN. !!! BAD !!! Move OUT of cycle???
-                self.screen = np.zeros((self.pyramid_size, self.pyramid_size,\
-                                         3), np.uint8)
-
-                #print(screen.shape)
-                #print(projection.shape)
-
+                # Create FOUR projections rotated by -90 deg
+                self.screen = np.zeros((self.pyramid_size, self.pyramid_size, \
+                                       3), np.uint8)
                 for i in range(4):
-                    self._add(projection)    
+                    self._add(projection, m_blnd)    
                     self.screen = self._rotate(self.screen, -90, \
                                            self.scr_centre, self.scr_centre)
 
                 if self._out != None:
                     self._out.write(self.screen)
-
-                #cv2.imshow(win_header,left_right)
-                cv2.imshow(self.win_header, self.screen)
+                cv2.imshow('screen', self.screen)
                 if cv2.waitKey(1) & 0xFF == ord('q'):
                     break
             else:
                 break
-
-
         self.stop()
 
     def set_output(self, file_path):
@@ -113,7 +139,7 @@ class Ghost(object):
         Args:
             file_path: filename or path to output file
         '''
-        print(file_path)
+        print('Writing to: {}'.format(file_path))
         fourcc = cv2.VideoWriter_fourcc(*'XVID')
         self._out = cv2.VideoWriter(file_path, fourcc, 20.0, \
                             (self.height, self.width))
@@ -126,10 +152,6 @@ class Ghost(object):
             self._out.release()
         cv2.destroyAllWindows()
 
-    @property
-    def get_frame(self):
-        return self._cap.read()
-    
     def _create_mask(self, scale_x=1, scale_y=1, centre=MASK_CENTRE, \
                      bottom=MASK_BOTTOM):
         '''Creates mask.
@@ -162,52 +184,56 @@ class Ghost(object):
         self.mask = result
         self.mask_inv = cv2.bitwise_not(self.mask)
 
-    def _add(self, window, blend=MASK_BLEND):
+    @staticmethod
+    def _apply_mask(img, mask):
+        '''Applies mask to image
+        '''
+        return cv2.bitwise_and(img, img, mask=mask)
 
-        w_height, w_width = window.shape[:2]
+    def _add(self, projection, blend=MASK_BLEND):
+        '''Add the PROJECTION to bottom centre of SCREEN'''
 
-        # CENTRE of SCREEN (ROI coordinates)
-        centre = self.pyramid_size / 2
-
-        x = centre - w_width / 2    
-        y = centre - w_height * blend
-
-        # Create ROI for (y : y + b_height, x : x + b_width) region
-        roi = self.screen[y : y + w_height, x : x + w_width]
-        #### Apply mask & mask_inverse to ROI ###
-        # Black-out the area of window in ROI
+        p_height, p_width = projection.shape[:2]
+        #Extract ROI
+        x = self.scr_centre - p_width / 2    
+        y = self.scr_centre - p_height * blend
+        roi = self.screen[y : y + p_height, x : x + p_width]
+        # Black-out the area of projection in ROI
         roi_bg = self._apply_mask(roi, self.mask_inv)
-
         # Add WINDOW to ROI
-        #dst = cv2.add(cv2.bitwise_not(roi_bg), window)
-        dst = cv2.add(roi_bg, window)
+        dst = cv2.add(roi_bg, projection)
         # Apply ROI to SCREEN
-        self.screen[y : y + w_height, x : x + w_width] = dst
-        #self._show_plt(self.screen)
-
-    def _show(self, img):
-        cv2.imshow(self.win_header, img)
-
-        k = cv2.waitKey(0) & 0xFF
-
-        if k == 27:     # ESC key
-            cv2.destroyWindow(self.win_header)
+        self.screen[y : y + p_height, x : x + p_width] = dst
 
     @staticmethod
-    def _show_plt(img):
-        plt.imshow(img, cmap = 'gray', interpolation = 'bicubic')
-        #plt.xticks([]), plt.yticks([])
-        plt.show()
+    def _imfill_holes(im_in):
+        '''Flloodfill white holes in binary image'''
+
+        th, im_th = cv2.threshold(im_in, 220, 255, cv2.THRESH_BINARY_INV);
+        # Copy the thresholded image.
+        im_floodfill = im_th.copy()         
+        # Mask used to flood filling.
+        # Notice the size needs to be 2 pixels than the image.
+        h, w = im_th.shape[:2]
+        mask = np.zeros((h+2, w+2), np.uint8)
+        # Floodfill from point (0, 0)
+        cv2.floodFill(im_floodfill, mask, (0,0), 255);
+        # Invert floodfilled image
+        im_floodfill_inv = cv2.bitwise_not(im_floodfill)
+        # Combine the two images to get the foreground.
+        im_out = im_th | im_floodfill_inv
+        return im_out
 
     @staticmethod
     def _scale(img, ratio):
         '''Uniform scale
         '''
-        return cv2.resize(img,None,fx=ratio, fy=ratio, \
+        return cv2.resize(img, None, fx=ratio, fy=ratio, \
                           interpolation = cv2.INTER_CUBIC)
 
     @staticmethod
     def _translate(img, x_dist, y_dist):
+        rows, cols = img.shape[:2]
         M = np.float32([[1, 0, x_dist],[0, 1, y_dist]])
         dst = cv2.warpAffine(img, M, (cols, rows))
         return dst
@@ -227,15 +253,25 @@ class Ghost(object):
         result = cv2.warpAffine(img, M, (width, height))
         return result    
 
+    def _show(self, img):
+        cv2.imshow('show', img)
+
+        k = cv2.waitKey(0) & 0xFF
+
+        if k == 27:     # ESC key
+            cv2.destroyWindow('show')
+
     @staticmethod
-    def _apply_mask(img, mask):
-        '''Applies mask to image
-        '''
-        return cv2.bitwise_and(img, img, mask=mask)
+    def _show_plt(img):
+        plt.imshow(img, cmap = 'gray', interpolation = 'bicubic')
+        #plt.xticks([]), plt.yticks([])
+        plt.show()
+
 
 ghost = Ghost()
-path = getcwd() + 'out1.avi'
-ghost.set_output(path)
+
+#path = getcwd() + '/out.avi'
+#ghost.set_output(path)
 
 ghost.run()
 
