@@ -38,12 +38,57 @@ class Ghost(object):
         self.scr_centre = self.pyramid_size / 2
         self.pos = {}
 
+    def run(self):
+        '''Starts video processor.'''
+
+        self._init_run()
+        fgbg = cv2.createBackgroundSubtractorMOG2(history = 1000,\
+                                                    varThreshold = 25,\
+                                                    detectShadows = False)
+        cap = self._cap      
+        while(cap.isOpened()):
+            ret, frame = cap.read()
+            if ret == True:
+                self._get_values()      # Get current positions of trackbars
+                if self.pos['BS_on']:   # Apply Background Substraction
+                    fgmask = self._fg_mask(frame=frame, fgbg=fgbg, \
+                                           k_size=self.pos['k_size'], \
+                                           iters=self.pos['iters'],
+                                           learn_rate=self.pos['BS_rate'])
+                    frame = self._apply_mask(frame, fgmask)
+                if (self.pos['i_x'] != 0)or(self.pos['i_y'] != 0):  # Move
+                        frame = self._translate(frame, int(self.pos['i_x']), \
+                                                int(self.pos['i_y']))
+                # Create/Apply triangle mask
+                self._triangle_mask(side=self.pos['m_side'], \
+                                    centre=self.pos['m_cntr'], \
+                                    bottom=self.pos['m_btm'])
+                projection = self._apply_mask(frame, self.mask)
+                # Create FOUR projections rotated by -90 deg
+                self.screen = np.zeros((self.pyramid_size, self.pyramid_size, \
+                                        3), np.uint8)
+                for i in range(self.pos['projections']):
+                    self._add(projection, blend=self.pos['m_blend'])    
+                    self.screen = self._rotate(self.screen, -90, \
+                                        self.scr_centre, self.scr_centre)
+                if self._out != None:
+                    self._out.write(self.screen)
+                cv2.imshow('screen', self.screen)          # Output SCREEN to window
+                if cv2.waitKey(1) & 0xFF == ord('q'):      # Wait for 'q' to exit
+                    break
+            else:
+                break
+        self.stop()
+
     def _init_run(self):
         '''Initializes outputі and adjustments'''
+        self.count = 0
         def nothing(x):
             pass
         cv2.namedWindow(self.h, cv2.WINDOW_NORMAL)
         cv2.namedWindow('screen', cv2.WINDOW_NORMAL)
+        cv2.setWindowProperty("screen", cv2.WND_PROP_FULLSCREEN, \
+                              cv2.WINDOW_FULLSCREEN)
         # Create trackbars
         cv2.createTrackbar('mask centre', self.h, int(self.MASK_CENTRE * 100),\
                            100, nothing)
@@ -56,6 +101,7 @@ class Ghost(object):
                              nothing)
         cv2.createTrackbar('image y', self.h, int(self.height / 2), \
                            self.height, nothing)
+        cv2.createTrackbar('projections', self.h, 4, 4, nothing)
         #cv2.createTrackbar('image scale', self.h, 10, 19, nothing)
 
         cv2.createTrackbar('BS on/off\n(wait a second)', self.h, 0, 1, nothing)        
@@ -63,62 +109,22 @@ class Ghost(object):
         cv2.createTrackbar('dilation kernel size', self.h, 5, 20, nothing)
         cv2.createTrackbar('dilation iters', self.h, 3, 10, nothing)
 
-    def run(self):
-        '''Starts video processor.'''
-
-        self._init_run()
-        fgbg = cv2.createBackgroundSubtractorMOG2(history = 1000,\
-                                                    varThreshold = 25,\
-                                                    detectShadows = False)
-        cap = self._cap      
-        while(cap.isOpened()):
-            ret, frame = cap.read()
-            if ret == True:
-                # Get current positions of trackbars
-                self._get_values()
-
-                if self.pos['BS_on']:
-                    fgmask = self._fg_mask(frame=frame, fgbg=fgbg, \
-                                           k_size=self.pos['k_size'], iters=self.pos['iters'], \
-                                           learn_rate=self.pos['BS_rate'])
-                    frame = self._apply_mask(frame, fgmask)
-                if (self.pos['i_x'] != 0)or(self.pos['i_y'] != 0):
-                        frame = self._translate(frame, int(self.pos['i_x']), \
-                                                int(self.pos['i_y']))
-                # Create/Apply triangle mask
-                self._create_mask(side=self.pos['m_side'], centre=self.pos['m_cntr'], \
-                                  bottom=self.pos['m_btm'])
-                projection = self._apply_mask(frame, self.mask)
-                # Create FOUR projections rotated by -90 deg
-                self.screen = np.zeros((self.pyramid_size, self.pyramid_size, \
-                                        3), np.uint8)
-                for i in range(4):
-                    self._add(projection, blend=self.pos['m_blend'])    
-                    self.screen = self._rotate(self.screen, -90, \
-                                        self.scr_centre, self.scr_centre)
-                if self._out != None:
-                    self._out.write(self.screen)
-                # Output SCREEN to window
-                cv2.imshow('screen', self.screen)
-                # Wait for 'q' to exit
-                if cv2.waitKey(1) & 0xFF == ord('q'):
-                    break
-            else:
-                break
-        self.stop()
-
     def _get_values(self):
-        '''Refreshes variables with Trackbars positions'''
+        '''Refreshes variables with Trackbars positions (self.pos - var dict)'''
+
         self.pos['m_cntr'] = cv2.getTrackbarPos('mask centre', self.h) / 100
         self.pos['m_btm'] = cv2.getTrackbarPos('mask bottom', self.h)  / 100
         self.pos['m_side'] = cv2.getTrackbarPos('mask side', self.h) / 100
         self.pos['m_blend'] = cv2.getTrackbarPos('mask blend', self.h) / 1000
         self.pos['i_x'] = cv2.getTrackbarPos('image x', self.h) - self.width / 2
         self.pos['i_y'] = cv2.getTrackbarPos('image y', self.h) - self.height / 2
+        self.pos['projections'] = cv2.getTrackbarPos('projections', self.h)
         #i_ratio = cv2.getTrackbarPos('image scale', self.h) / 10 or 1
-        self.pos['BS_on'] = cv2.getTrackbarPos('BS on/off\n(wait a second)', self.h)
+        self.pos['BS_on'] = cv2.getTrackbarPos('BS on/off\n(wait a second)', \
+                                               self.h)
         self.pos['BS_rate'] = cv2.getTrackbarPos('BS learn.rate', self.h) / 10000
-        self.pos['k_size'] = cv2.getTrackbarPos('dilation kernel size', self.h) or 1
+        self.pos['k_size'] = cv2.getTrackbarPos('dilation kernel size', \
+                                                self.h) or 1
         self.pos['iters'] = cv2.getTrackbarPos('dilation iters', self.h)
 
     def set_output(self, file_path):
@@ -139,7 +145,7 @@ class Ghost(object):
             self._out.release()
         cv2.destroyAllWindows()
 
-    def _create_mask(self, side=1, centre=MASK_CENTRE, \
+    def _triangle_mask(self, side=1, centre=MASK_CENTRE, \
                      bottom=MASK_BOTTOM):
         '''Creates mask.
         Args:
@@ -172,30 +178,40 @@ class Ghost(object):
         self.mask_inv = cv2.bitwise_not(self.mask)
 
     def _fg_mask(self, frame, fgbg, k_size, iters, learn_rate):
-        '''Background substraction
+        '''Background substraction MOG2 algorithm.
+        Creates FOREGROUND mask
         Args:
             frame: 
             fgbg: MOG2 instance
             k_size: kernel size (for morphologyEx operations)
             iters: number of iterations for Dilation
+            learn_rate: learning rate for MOG2 alg (def 0.002)
         Returns:
             fgmask: FOREGROUND mask
         '''
         # Get FGMASK with MOG2
         fgmask = fgbg.apply(frame, learningRate=learn_rate)
+        print(self.count)
+        self.count += 1
+        if self.count % 100 == 0:
+            cv2.imwrite('fgmask{}.png'.format(self.count), fgmask)
         # Elliptical Kernel for morphology func
         kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE,(k_size, k_size))
         # Dilation alg (increases white regions size)
         fgmask = cv2.dilate(fgmask, kernel, iterations = iters)        
         # Closing (remove black points from the object)
         fgmask = cv2.morphologyEx(fgmask, cv2.MORPH_CLOSE, kernel)
+        # Draw white border
+        cv2.rectangle(fgmask, (0, 0), (self.width, self.height), \
+                      (255, 255, 255), 3)
+
         # Fill Holes (flood fill the object)
-        fgmask = self._imfill_holes(cv2.bitwise_not(fgmask))       
+        #fgmask = self._imfill_holes(cv2.bitwise_not(fgmask))       
         return fgmask
 
     @staticmethod
     def _apply_mask(img, mask):
-        '''Applies mask to image
+        '''Apply mask to image
         '''
         return cv2.bitwise_and(img, img, mask=mask)
 
@@ -237,7 +253,7 @@ class Ghost(object):
     def _scale(self, img, ratio):
         '''Uniform scale
         '''
-        return cv2.resize(img, None, fx=ratio, fy=ratio)#(ratio * self.width, ratio * self.height))
+        return cv2.resize(img, None, fx=ratio, fy=ratio)
 
     def _show(self, img):
         cv2.imshow('show', img)
