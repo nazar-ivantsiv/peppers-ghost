@@ -17,9 +17,9 @@ class Ghost(object):
     Args:
         source: video camera or file
     '''
-    MASK_CENTRE = 0.5
-    MASK_BOTTOM = 0.33
-    MASK_BLEND = 0.915
+    MASK_CENTRE = 0 #0.5
+    MASK_BOTTOM = 1 #0.33
+    MASK_BLEND = 1 #0.915
 
     def __init__(self, source=0):
         '''Args:
@@ -72,7 +72,7 @@ class Ghost(object):
                     fgmask = np.zeros((self.height, self.width, 3), np.uint8)
                     fgmask = self._draw_ellipse(fgmask, self.faces)
                     fgmask = cv2.cvtColor(fgmask, cv2.COLOR_BGR2GRAY)
-                frame = self._apply_mask(frame, fgmask)
+                #frame = self._apply_mask(frame, fgmask)
 
                 # Create/Apply triangle mask
                 self._triangle_mask(side=self.pos['m_side'], \
@@ -109,7 +109,7 @@ class Ghost(object):
                            100, nothing)
         cv2.createTrackbar('mask bottom', self.h, int(self.MASK_BOTTOM * 100),\
                            100, nothing)
-        cv2.createTrackbar('mask side', self.h, 100, 200, nothing)
+        cv2.createTrackbar('mask side', self.h, 150, 200, nothing)
         cv2.createTrackbar('mask blend', self.h, int(self.MASK_BLEND * 1000),\
                            1000, nothing)
         cv2.createTrackbar('image x', self.h, int(self.width / 2), self.width,\
@@ -160,7 +160,7 @@ class Ghost(object):
             self._out.release()
         cv2.destroyAllWindows()
 
-    def _triangle_mask(self, side=1, centre=MASK_CENTRE, \
+    def _triangle_mask(self, side=1.5, centre=MASK_CENTRE, \
                      bottom=MASK_BOTTOM):
         '''Creates mask.
         Args:
