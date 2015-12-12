@@ -10,6 +10,7 @@ import pdb
 import numpy as np
 import cv2
 
+HAAR_CASACDE_PATH = 'haarcascade_frontalface_default.xml'
 
 class Ghost(object):
     '''Pepper's Ghost video processor. 
@@ -43,8 +44,9 @@ class Ghost(object):
 
         self._init_run()
         fgbg = cv2.createBackgroundSubtractorMOG2(history = 1000,\
-                                                    varThreshold = 25,\
-                                                    detectShadows = False)
+                                                  varThreshold = 25,\
+                                                  detectShadows = False)
+        face_cascade = cv2.CascadeClassifier(HAAR_CASACDE_PATH)
         cap = self._cap      
         while(cap.isOpened()):
             ret, frame = cap.read()
@@ -59,6 +61,13 @@ class Ghost(object):
                 if (self.pos['i_x'] != 0)or(self.pos['i_y'] != 0):  # Move
                         frame = self._translate(frame, int(self.pos['i_x']), \
                                                 int(self.pos['i_y']))
+                # Detect faces (coords. with rectangles of faces)
+                if not face_cascade.empty():
+                    gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+                    gray = cv2.equalizeHist(gray)   # Improves the contrast in an image
+                    faces = self._detect_faces(img=gray, cascade=face_cascade)
+                    print(faces)
+                    frame = self._draw_rect(frame, faces)
                 # Create/Apply triangle mask
                 self._triangle_mask(side=self.pos['m_side'], \
                                     centre=self.pos['m_cntr'], \
@@ -190,23 +199,19 @@ class Ghost(object):
             fgmask: FOREGROUND mask
         '''
         # Get FGMASK with MOG2
+        frame = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+        frame = cv2.equalizeHist(frame)   # Improves the contrast in an image
         fgmask = fgbg.apply(frame, learningRate=learn_rate)
-        print(self.count)
-        self.count += 1
-        if self.count % 100 == 0:
-            cv2.imwrite('fgmask{}.png'.format(self.count), fgmask)
+#        print(self.count)
+#        self.count += 1
+#        if self.count % 100 == 0:
+#            cv2.imwrite('fgmask{}.png'.format(self.count), fgmask)
         # Elliptical Kernel for morphology func
         kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE,(k_size, k_size))
         # Dilation alg (increases white regions size)
         fgmask = cv2.dilate(fgmask, kernel, iterations = iters)        
         # Closing (remove black points from the object)
         fgmask = cv2.morphologyEx(fgmask, cv2.MORPH_CLOSE, kernel)
-        # Draw white border
-        cv2.rectangle(fgmask, (0, 0), (self.width, self.height), \
-                      (255, 255, 255), 3)
-
-        # Fill Holes (flood fill the object)
-        #fgmask = self._imfill_holes(cv2.bitwise_not(fgmask))       
         return fgmask
 
     @staticmethod
@@ -231,37 +236,20 @@ class Ghost(object):
         self.screen[y : y + p_height, x : x + p_width] = dst
 
     @staticmethod
-    def _imfill_holes(im_in):
-        '''Floodfill white holes in binary image'''
+    def _detect_faces(img, cascade):
+        rects = cascade.detectMultiScale(img, scaleFactor=1.3, minNeighbors=4,\
+                        minSize=(30, 30), flags=cv2.CASCADE_SCALE_IMAGE)
+        if len(rects) == 0:
+            return []
+        return rects
 
-        th, im_th = cv2.threshold(im_in, 220, 255, cv2.THRESH_BINARY_INV);
-        # Copy the thresholded image.
-        im_floodfill = im_th.copy()         
-        # Mask used to flood filling.
-        # Notice the size needs to be 2 pixels than the image.
-        h, w = im_th.shape[:2]
-        mask = np.zeros((h+2, w+2), np.uint8)
-        # Floodfill from point (0, 0)
-        cv2.floodFill(im_floodfill, mask, (0,0), 255);
-        # Invert floodfilled image
-        im_floodfill_inv = cv2.bitwise_not(im_floodfill)
-        # Combine the two images to get the foreground.
-        im_out = im_th | im_floodfill_inv
-        return im_out
-
-
-    def _scale(self, img, ratio):
-        '''Uniform scale
-        '''
-        return cv2.resize(img, None, fx=ratio, fy=ratio)
-
-    def _show(self, img):
-        cv2.imshow('show', img)
-
-        k = cv2.waitKey(0) & 0xFF
-
-        if k == 27:     # ESC key
-            cv2.destroyWindow('show')
+    @staticmethod
+    def _draw_rect(img, faces):
+        for (x,y,w,h) in faces:
+            img = cv2.rectangle(img,(x,y),(x+w,y+h),(255,0,0),2)
+            #roi_gray = gray[y:y+h, x:x+w]
+            #roi_color = img[y:y+h, x:x+w]
+        return img
 
     @staticmethod
     def _translate(img, x_dist, y_dist):
@@ -284,6 +272,19 @@ class Ghost(object):
         M = cv2.getRotationMatrix2D((anchor_x, anchor_y), angle, 1)
         result = cv2.warpAffine(img, M, (width, height))
         return result    
+
+    def _scale(self, img, ratio):
+        '''Uniform scale
+        '''
+        return cv2.resize(img, None, fx=ratio, fy=ratio)
+
+    def _show(self, img):
+        cv2.imshow('show', img)
+
+        k = cv2.waitKey(0) & 0xFF
+
+        if k == 27:     # ESC key
+            cv2.destroyWindow('show')
 
     @staticmethod
     def _show_plt(img):
