@@ -65,14 +65,16 @@ class Ghost(object):
                     frame = self._apply_mask(frame, bs_mask)
                 # Apply face detection mask (if ON)
                 if self.pos['tracking_on']:
-                    mask = self._track_faces(frame)
+                    tr_mask = self._track_faces(frame)
                     # GrabCut face(fg) extraction
-                    if self.pos['grab_cut']:
-                        rect = tuple(x for x in self.faces[0])   
-                        mask = self._grab_cut(img=frame, \
+                    if self.pos['gc_iters'] > 0:
+                        rect = tuple(x for x in self.faces[0])
+                        gc_mask = self._grab_cut(img=frame, \
                                               rect=rect, \
-                                              iters=5)
-                    frame = self._apply_mask(frame, mask)
+                                              iters=self.pos['gc_iters'])
+                        frame = self._apply_mask(frame, gc_mask)
+                    else:
+                        frame = self._apply_mask(frame, tr_mask)
                 # Create/Apply triangle mask
                 self._create_triangle_mask(side=self.pos['m_side'], \
                                             centre=self.pos['m_cntr'], \
@@ -147,9 +149,9 @@ class Ghost(object):
         cv2.createTrackbar('projections', self.h, 4, 4, nothing)
         #cv2.createTrackbar('image scale', self.h, 10, 19, nothing)
         cv2.createTrackbar('loop video', self.h, self.loop_video, 1, nothing)
-        cv2.createTrackbar('track faces', self.h, 0, 1, nothing)
-        cv2.createTrackbar('  GrabCut', self.h, 0, 1, nothing)
-        cv2.createTrackbar('BS (on/off)', self.h, 0, 1, nothing)
+        cv2.createTrackbar('Track Faces', self.h, 0, 1, nothing)
+        cv2.createTrackbar('  GrabCut iters', self.h, 0, 5, nothing)
+        cv2.createTrackbar('BS:', self.h, 0, 1, nothing)
         cv2.createTrackbar('  BS learn.rate', self.h, 20, 50, nothing)
         cv2.createTrackbar('  dilation kernel size', self.h, 5, 20, nothing)
         cv2.createTrackbar('  dilation iters', self.h, 3, 10, nothing)
@@ -170,24 +172,13 @@ class Ghost(object):
         self.pos['projections'] = cv2.getTrackbarPos('projections', self.h)
         #i_ratio = cv2.getTrackbarPos('image scale', self.h) / 10 or 1
         self.loop_video = cv2.getTrackbarPos('loop video', self.h)
-        self.pos['tracking_on'] = cv2.getTrackbarPos('track faces', self.h)
-        self.pos['grab_cut'] = cv2.getTrackbarPos('  GrabCut', self.h)
-        self.pos['BS_on'] = cv2.getTrackbarPos('BS (on/off)', self.h)
+        self.pos['tracking_on'] = cv2.getTrackbarPos('Track Faces', self.h)
+        self.pos['gc_iters'] = cv2.getTrackbarPos('  GrabCut iters', self.h)
+        self.pos['BS_on'] = cv2.getTrackbarPos('BS:', self.h)
         self.pos['BS_rate'] = cv2.getTrackbarPos('  BS learn.rate', self.h) / 10000
         self.pos['k_size'] = cv2.getTrackbarPos('  dilation kernel size', \
                                                 self.h) or 1
         self.pos['iters'] = cv2.getTrackbarPos('  dilation iters', self.h)
-
-    def _grab_cut(self, img, mask=0, rect=None, iters=5):
-        ''' '''
-        bgdModel = np.zeros((1, 65), np.float64)
-        fgdModel = np.zeros((1, 65), np.float64)
-        mask = np.zeros(img.shape[:2], np.uint8)
-        cv2.grabCut(img, mask, rect, bgdModel, fgdModel, iters, \
-                    cv2.GC_INIT_WITH_RECT)
-        # Substitutes all bg pixels(0,2) with sure background (0)
-        gc_mask = np.where((mask==2) | (mask==0), 0, 1).astype('uint8') 
-        return gc_mask
 
     def _substract_bg(self, frame):
         '''Apply Background Substraction on frame.
@@ -208,6 +199,57 @@ class Ghost(object):
         fgmask = cv2.morphologyEx(fgmask, cv2.MORPH_OPEN, kernel)
         fgmask = cv2.morphologyEx(fgmask, cv2.MORPH_CLOSE, kernel)
         return fgmask
+
+    def _grab_cut(self, img, mask=0, rect=None, iters=5):
+        ''' '''
+        bgdModel = np.zeros((1, 65), np.float64)
+        fgdModel = np.zeros((1, 65), np.float64)
+        height, width = img.shape[:2]
+        mask = np.zeros((height // 2, width // 2), np.uint8)
+        cv2.grabCut(cv2.pyrDown(img), mask, tuple(x // 2 for x in rect), \
+                                bgdModel, fgdModel, iters, \
+                                cv2.GC_INIT_WITH_RECT)
+        # Substitutes all bg pixels(0,2) with sure background (0)
+        gc_mask = np.where((mask==2) | (mask==0), 0, 1).astype('uint8') 
+        return cv2.pyrUp(gc_mask)
+
+    def _track_faces(self, img):
+        '''Apply oval mask over faces detected in the image.
+        Args:
+            img: image
+        Returns:
+            self.face_x: first detected face X coord.
+            self.face_y: first detected face Y coord.
+            img: image with the oval mask around the face
+        '''
+        faces = self._detect_faces(img)
+        if faces != []: # Face coords detected
+            self.faces = faces
+        if self.faces != []:
+            fgmask = np.zeros((self.height, self.width, 3), np.uint8)
+            fgmask = self._draw_ellipse(fgmask, self.faces)
+        else:
+            fgmask = np.ones((self.height, self.width, 3), np.uint8)
+        fgmask = self._img_to_gray(fgmask)
+        return fgmask
+
+    def _detect_faces(self, img):
+        '''Detects faces on the image.
+        Args:
+            img: image
+        Returns:
+            faces - list of (x,y,w,h) face coordinates
+        '''
+        if not self._face_cascade.empty():
+            gray = self._img_to_gray(img)
+            faces = self._face_cascade.detectMultiScale(gray, \
+                                                scaleFactor=1.3, \
+                                                minNeighbors=4, \
+                                                minSize=(30, 30), \
+                                                flags=cv2.CASCADE_SCALE_IMAGE)
+            if len(faces) == 0:
+                return []
+            return faces
 
     def _create_triangle_mask(self, side=1.5, centre=MASK_CENTRE, \
                      bottom=MASK_BOTTOM):
@@ -258,44 +300,6 @@ class Ghost(object):
         dst = cv2.add(roi_bg, projection)
         # Apply ROI to SCREEN
         self.screen[y : y + p_height, x : x + p_width] = dst
-
-    def _track_faces(self, img):
-        '''Apply oval mask over faces detected in the image.
-        Args:
-            img: image
-        Returns:
-            self.face_x: first detected face X coord.
-            self.face_y: first detected face Y coord.
-            img: image with the oval mask around the face
-        '''
-        faces = self._detect_faces(img)
-        if faces != []: # Face coords detected
-            self.faces = faces
-        if self.faces != []:
-            fgmask = np.zeros((self.height, self.width, 3), np.uint8)
-            fgmask = self._draw_ellipse(fgmask, self.faces)
-        else:
-            fgmask = np.ones((self.height, self.width, 3), np.uint8)
-        fgmask = self._img_to_gray(fgmask)
-        return fgmask
-
-    def _detect_faces(self, img):
-        '''Detects faces on the image.
-        Args:
-            img: image
-        Returns:
-            faces - list of (x,y,w,h) face coordinates
-        '''
-        if not self._face_cascade.empty():
-            gray = self._img_to_gray(img)
-            faces = self._face_cascade.detectMultiScale(gray, \
-                                                scaleFactor=1.3, \
-                                                minNeighbors=4, \
-                                                minSize=(30, 30), \
-                                                flags=cv2.CASCADE_SCALE_IMAGE)
-            if len(faces) == 0:
-                return []
-            return faces
 
     @staticmethod
     def _draw_rect(img, faces):
@@ -368,7 +372,7 @@ class Ghost(object):
 
 
 if __name__ == '__main__':
-    #ghost = Ghost('/home/chip/pythoncourse/hologram2/test3.mp4')
+    #ghost = Ghost('/home/chip/pythoncourse/hologram2/test.mp4')
     ghost = Ghost()
 
     #path = getcwd() + '/out.avi'
