@@ -19,6 +19,7 @@ class Ghost(object):
     Args:
         source: video camera or file
     '''
+    DEBUGGER_MODE = 1 #0
     MASK_CENTRE = 0 #0.5
     MASK_BOTTOM = 1 #0.33
     MASK_BLEND = 1 #0.915
@@ -32,7 +33,7 @@ class Ghost(object):
         self._cap = cv2.VideoCapture(self.source)
         if not self._cap.isOpened():
             self._cap.open()                    # Input source instance
-        self._out = None                        # Output source instance (file)
+        self._out = None                        # Output source instance(file)
         self.loop_video = 1                     # Flag: loop video
         self.height = int(self._cap.get(4))     # Frame height
         self.width = int(self._cap.get(3))      # Frame width
@@ -40,11 +41,16 @@ class Ghost(object):
         self.scr_centre_x = self.width          # Scr centre y
         self.scr_centre_y = self.height         # Scr centre x
         self.pos = {}                           # Trackbar positions
-        self.faces = []                         # Faces detected
-        self._fgbg = cv2.createBackgroundSubtractorMOG2(history=1000,\
-                                                  varThreshold=25,\
-                                                  detectShadows=False)
-        self._face_cascade = cv2.CascadeClassifier(HAAR_CASCADE_PATH)
+            # Faces detected (by default - rect in the centre)
+        x = self.width // 2                     # Frame centre x
+        y = self.height // 2                    # Frame centre y
+        a = x // 2
+        self.faces = [np.array([x - a, y - a, x, y])]
+        self.gc_rect = (x - a, y - a, x, y)     # GrabCut default rect
+        self.def_face = self.faces              # Default value (rect in centre)
+        self._fgbg_flag = False                 # Flag: BS instance created
+        self._face_cascade_flag = False         # Flag: Cascade clsfr for GC
+        self._debugger_off = not self.DEBUGGER_MODE # Flag: debugger status
 
     def run(self):
         '''Starts video processor.'''
@@ -53,46 +59,16 @@ class Ghost(object):
         while cap.isOpened():
             ret, frame = cap.read()
             if ret == True:
-                # Get current positions of trackbars
-                self._get_values()
-                # Translate image
-                if (self.pos['i_x'] != 0)or(self.pos['i_y'] != 0):
-                    frame = self._translate(frame, int(self.pos['i_x']), \
-                                            int(self.pos['i_y']))
-                # Background Substraction (if ON)
-                if self.pos['BS_on']:
-                    bs_mask = self._substract_bg(frame)
-                    frame = self._apply_mask(frame, bs_mask)
-                # Apply face detection mask (if ON)
-                if self.pos['tracking_on']:
-                    tr_mask = self._track_faces(frame)
-                    # GrabCut face(fg) extraction
-                    if self.pos['gc_iters'] > 0:
-                        rect = tuple(x for x in self.faces[0])
-                        gc_mask = self._grab_cut(img=frame, \
-                                              rect=rect, \
-                                              iters=self.pos['gc_iters'])
-                        frame = self._apply_mask(frame, gc_mask)
-                    else:
-                        frame = self._apply_mask(frame, tr_mask)
-                # Create/Apply triangle mask
-                self._create_triangle_mask(side=self.pos['m_side'], \
-                                            centre=self.pos['m_cntr'], \
-                                            bottom=self.pos['m_btm'])
-                projection = self._apply_mask(frame, self.mask)
-                # Create FOUR projections rotated by -90 deg
-                self.screen = np.zeros((self.pyramid_size, \
-                                    self.pos['scr_width'], 3), np.uint8)
-                for i in range(self.pos['projections']):
-                    self._add(projection, blend=self.pos['m_blend'])
-                    self.screen = self._rotate(self.screen, -90, \
-                                        self.scr_centre_x, self.scr_centre_y)
-                if self._out != None:
+                # Create projection with all the masks applied to original frame
+                projection = self._apply_settings(frame)                   
+                self._rotate_projection(projection)
+                if self._out != None:               # Save video to file
                     self._out.write(self.screen)
-                cv2.imshow('screen', self.screen)    # Output SCREEN to window
-                self._loop_video()
+                cv2.imshow('screen', self.screen)   # Output SCREEN to window
+                self._loop_video()                  # Loop the video
                 if cv2.waitKey(1) & 0xFF == ord('q'): # Wait for 'q' to exit
                     break
+                self._debugger_mode(frame, projection)
             else:
                 break
         self.stop()
@@ -155,8 +131,9 @@ class Ghost(object):
         cv2.createTrackbar('  BS learn.rate', self.h, 20, 50, nothing)
         cv2.createTrackbar('  dilation kernel size', self.h, 5, 20, nothing)
         cv2.createTrackbar('  dilation iters', self.h, 3, 10, nothing)
+        cv2.createTrackbar('debugger', self.h, self.DEBUGGER_MODE, 1, nothing)
 
-    def _get_values(self):
+    def _get_trackbar_values(self):
         '''Refreshes variables with Trackbars positions (self.pos - var dict)'''
         self.pos['scr_width'] = max(cv2.getTrackbarPos('fit width', self.h), \
                                     self.pyramid_size)
@@ -179,6 +156,51 @@ class Ghost(object):
         self.pos['k_size'] = cv2.getTrackbarPos('  dilation kernel size', \
                                                 self.h) or 1
         self.pos['iters'] = cv2.getTrackbarPos('  dilation iters', self.h)
+        self.pos['debugger'] = cv2.getTrackbarPos('debugger', self.h)
+
+    def _apply_settings(self, frame):
+        '''Apply custom settings from Trackbars.
+        Args:
+            frame: original frame
+        Returns:
+            result: modified frame according to user settings 
+        '''
+        result = frame.copy()
+        self._get_trackbar_values()
+        # Translate image to (i_x, i_y)
+        if (self.pos['i_x'] != 0)or(self.pos['i_y'] != 0):
+            result = self._translate(result, int(self.pos['i_x']), \
+                                    int(self.pos['i_y']))
+        # Background Substraction (if ON)
+        if self.pos['BS_on']:
+            bs_mask = self._substract_bg(result)
+            result = self._apply_mask(result, bs_mask)
+        # Apply face detection mask (if ON)
+        if self.pos['tracking_on']:
+            tr_mask = self._track_faces(result)
+            # GrabCut face(fg) extraction
+            if self.pos['gc_iters'] > 0:
+                gc_mask = self._grab_cut(img=result, \
+                                         rect=self.gc_rect, \
+                                         iters=self.pos['gc_iters'])
+                result = self._apply_mask(result, gc_mask)
+            else:
+                result = self._apply_mask(result, tr_mask)
+        # Create/Apply triangle mask
+        self._create_triangle_mask(side=self.pos['m_side'], \
+                                    centre=self.pos['m_cntr'], \
+                                    bottom=self.pos['m_btm'])
+        result = self._apply_mask(result, self.mask)
+        return result
+
+    def _rotate_projection(self, projection):
+        '''Create FOUR projections rotated by -90 deg'''
+        self.screen = np.zeros((self.pyramid_size, self.pos['scr_width'], 3),\
+                                np.uint8)
+        for i in range(self.pos['projections']):
+            self._add(projection, blend=self.pos['m_blend'])
+            self.screen = self._rotate(self.screen, -90, self.scr_centre_x, \
+                                       self.scr_centre_y)
 
     def _substract_bg(self, frame):
         '''Apply Background Substraction on frame.
@@ -187,20 +209,27 @@ class Ghost(object):
         Returns: 
             fgmask: foreground mask
         '''
+        if not self._fgbg_flag:
+            # Create Background Substractor instance
+            self._fgbg = cv2.createBackgroundSubtractorMOG2(history=1000,\
+                                          varThreshold=25,\
+                                          detectShadows=False)
+            self._fgbg_flag = True
         # Get FGMASK with MOG2
         gray = self._img_to_gray(frame)
         fgmask = self._fgbg.apply(gray, learningRate=self.pos['BS_rate'])
         # Elliptical Kernel for morphology func
         kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE,( \
                                 self.pos['k_size'], self.pos['k_size']))
+        # Open (remove white points from the background)
+        fgmask = cv2.morphologyEx(fgmask, cv2.MORPH_OPEN, kernel)
+        # Close (remove black points from the object)
+        fgmask = cv2.morphologyEx(fgmask, cv2.MORPH_CLOSE, kernel)
         # Dilation alg (increases white regions size)
         fgmask = cv2.dilate(fgmask, kernel, iterations=self.pos['iters'])        
-        # Closing (remove black points from the object)
-        fgmask = cv2.morphologyEx(fgmask, cv2.MORPH_OPEN, kernel)
-        fgmask = cv2.morphologyEx(fgmask, cv2.MORPH_CLOSE, kernel)
         return fgmask
 
-    def _grab_cut(self, img, mask=0, rect=None, iters=5):
+    def _grab_cut(self, img, rect, iters=5):
         ''' '''
         bgdModel = np.zeros((1, 65), np.float64)
         fgdModel = np.zeros((1, 65), np.float64)
@@ -213,6 +242,18 @@ class Ghost(object):
         gc_mask = np.where((mask==2) | (mask==0), 0, 1).astype('uint8') 
         return cv2.pyrUp(gc_mask)
 
+    def _faces_to_gc_rect(self, faces, default_val=0):
+        '''Scale up face rect 2 times. Convert to tuple'''
+        if not default_val:
+            M = np.array([[1, 0, -0.5, 0],              # Scale matrix
+                          [0, 1, 0 , -0.5],
+                          [0, 0, 2, 0],
+                          [0, 0, 0, 2]])
+            v = faces[0]                                # Face coords
+            scaled_rect = np.inner(M, v).astype(int)    # Inner product M * v    
+            return tuple(x for x in scaled_rect)        # Convert to tuple
+        return tuple(x for x in faces[0])
+
     def _track_faces(self, img):
         '''Apply oval mask over faces detected in the image.
         Args:
@@ -222,14 +263,19 @@ class Ghost(object):
             self.face_y: first detected face Y coord.
             img: image with the oval mask around the face
         '''
+        if not self._face_cascade_flag:
+            # Create classifier instance
+            self._face_cascade = cv2.CascadeClassifier(HAAR_CASCADE_PATH)
+            self._face_cascade_flag = True
         faces = self._detect_faces(img)
-        if faces != []: # Face coords detected
+        if faces != []:                              # Face coords detected
             self.faces = faces
-        if self.faces != []:
-            fgmask = np.zeros((self.height, self.width, 3), np.uint8)
-            fgmask = self._draw_ellipse(fgmask, self.faces)
-        else:
-            fgmask = np.ones((self.height, self.width, 3), np.uint8)
+            self.gc_rect = self._faces_to_gc_rect(faces)
+        else:                                        # Default values
+            self.faces = self.def_face
+            self.gc_rect = self._faces_to_gc_rect(self.faces, 1)
+        fgmask = np.zeros((self.height, self.width, 3), np.uint8)
+        fgmask = self._draw_ellipse(fgmask, self.faces)
         fgmask = self._img_to_gray(fgmask)
         return fgmask
 
@@ -251,8 +297,7 @@ class Ghost(object):
                 return []
             return faces
 
-    def _create_triangle_mask(self, side=1.5, centre=MASK_CENTRE, \
-                     bottom=MASK_BOTTOM):
+    def _create_triangle_mask(self, side=1.5, centre=MASK_CENTRE, bottom=MASK_BOTTOM):
         '''Creates triangle mask. And saves to self.mask and self.mask_inv.
         Args:
             height: original image HEIGHT
@@ -300,6 +345,19 @@ class Ghost(object):
         dst = cv2.add(roi_bg, projection)
         # Apply ROI to SCREEN
         self.screen[y : y + p_height, x : x + p_width] = dst
+
+    def _debugger_mode(self, frame, projection):
+        if self.pos['debugger']:
+            frame = self._draw_rect(frame, [self.gc_rect])
+            cv2.imshow('original', frame)
+            cv2.imshow('result', projection)
+            self._debugger_off = False
+        else:
+            if not self._debugger_off:
+                cv2.destroyWindow('original')
+                cv2.destroyWindow('result')
+                self._debugger_off = True
+
 
     @staticmethod
     def _draw_rect(img, faces):
@@ -350,11 +408,11 @@ class Ghost(object):
         result = cv2.warpAffine(img, M, (width, height))
         return result    
 
-    def _scale(self, img, ratio):
+    @staticmethod
+    def _scale(img, ratio):
         '''Uniform scale'''
-        img = cv2.resize(img, None, fx=ratio, fy=ratio)
-        self.height, self.width = img.shape[:2]
-        return img
+        result = cv2.resize(img, None, fx=ratio, fy=ratio)
+        return result
 
     def _show(self, img):
         cv2.imshow('show', img)
@@ -367,7 +425,6 @@ class Ghost(object):
     @staticmethod
     def _show_plt(img):
         plt.imshow(img, cmap='gray', interpolation='bicubic')
-        #plt.xticks([]), plt.yticks([])
         plt.show()
 
 
