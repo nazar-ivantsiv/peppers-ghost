@@ -127,7 +127,6 @@ class Ghost(object):
         cv2.namedWindow('screen', cv2.WINDOW_NORMAL)
         cv2.setWindowProperty("screen", cv2.WND_PROP_FULLSCREEN, \
                               cv2.WINDOW_FULLSCREEN)
-        # Create trackbars
         cv2.createTrackbar('fit width', self.h, int(self.width * 2),\
                            self.width * 4, nothing)
         cv2.createTrackbar('mask centre', self.h, int(self.MASK_CENTRE * 100),\
@@ -142,7 +141,6 @@ class Ghost(object):
         cv2.createTrackbar('image y', self.h, int(self.height / 2), \
                            self.height, nothing)
         cv2.createTrackbar('projections', self.h, 4, 4, nothing)
-        #cv2.createTrackbar('image scale', self.h, 10, 19, nothing)
         cv2.createTrackbar('loop video', self.h, self.loop_video, 1, nothing)
         cv2.createTrackbar('Track Faces', self.h, 0, 1, nothing)
         cv2.createTrackbar('  GrabCut iters', self.h, 0, 5, nothing)
@@ -169,7 +167,6 @@ class Ghost(object):
         self.pos['i_y'] = cv2.getTrackbarPos('image y', self.h) - \
                                                 self.height / 2
         self.pos['projections'] = cv2.getTrackbarPos('projections', self.h)
-        #i_ratio = cv2.getTrackbarPos('image scale', self.h) / 10 or 1
         self.loop_video = cv2.getTrackbarPos('loop video', self.h)
         self.pos['tracking_on'] = cv2.getTrackbarPos('Track Faces', self.h)
         self.pos['gc_iters'] = cv2.getTrackbarPos('  GrabCut iters', self.h)
@@ -391,7 +388,7 @@ class Ghost(object):
         roi = self.screen[y : y + p_height, x : x + p_width]
         # Black-out the area of projection in ROI
         roi_bg = self._apply_mask(roi, self.mask_inv)
-        # Add WINDOW to ROI
+        # Add projection to ROI
         dst = cv2.add(roi_bg, projection)
         # Apply ROI to SCREEN
         self.screen[y : y + p_height, x : x + p_width] = dst
