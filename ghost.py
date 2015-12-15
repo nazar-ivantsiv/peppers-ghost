@@ -1,4 +1,28 @@
 #!bin/python
+'''
+==============================================================================
+Pepper's Ghost video processor.
+
+Author:
+    Nazar Ivantsiv
+Mentors:
+    Nazar Grabovskyy
+    Igor Lushchik
+
+Creates pyramid like projection of input video (camera or file), ready to
+use with pseudo holographic pyramid.
+Source - video camera or video file
+
+USAGE:
+    Ghost class creates two main windows (SETTINGS and screen). 'screen' will 
+open in the desktop that you are executing program at. Runs in FULLSCREEN 
+mode.
+    'SETTINGS' window gives you ability to change different Ghost instance
+attributes. In the bottom is a 'debugger' trackbar to turn on debugger mode.
+
+Key 'q' - To quit
+==============================================================================
+'''
 
 # -*- coding: utf-8 -*-
 from __future__ import division
@@ -7,26 +31,21 @@ from os import getcwd
 import numpy as np
 import cv2
 
-from matplotlib import pyplot as plt
-
-
+# Features for CascadeClassifier (frontal face)
 HAAR_CASCADE_PATH = 'haarcascade_frontalface_default.xml'
 
 class Ghost(object):
-    '''Pepper's Ghost video processor.
-    Creates pyramid like projection of input video (camera or file), ready to
-    use with pseudo holographic pyramid.
-    Args:
-        source: video camera or file
-    '''
-    DEBUGGER_MODE = 1 #0
-    MASK_CENTRE = 0 #0.5
-    MASK_BOTTOM = 1 #0.33
-    MASK_BLEND = 1 #0.915
+    '''Pepper's Ghost video processor.'''
+    DEBUGGER_MODE = 0                           # Flag: debugger mode off
+    MASK_CENTRE = 0                             # Centre of the mask in SCREEN
+    MASK_BOTTOM = 1                             # Mask bottom corner position
+    MASK_SIDE = 1.5                             # Mask side corners pos
+    MASK_BLEND = 1                              # Centre of the mask in FRAME
+
 
     def __init__(self, source=0):
         '''Args:
-            source: camera (0, 1) or vieofile
+            source -- camera (0, 1) or vieofile
         '''
         self.source = source                    # Input source num/path
         self.h = 'SETTINGS'
@@ -48,18 +67,18 @@ class Ghost(object):
         self.faces = [np.array([x - a, y - a, x, y])]
         self.gc_rect = (x - a, y - a, x, y)     # GrabCut default rect
         self.def_face = self.faces              # Default value (rect in centre)
-        self._fgbg_flag = False                 # Flag: BS instance created
+        self._bs_mog2_flag = False              # Flag: BS instance created
         self._face_cascade_flag = False         # Flag: Cascade clsfr for GC
         self._debugger_off = not self.DEBUGGER_MODE # Flag: debugger status
 
     def run(self):
-        '''Starts video processor.'''
+        '''Video processing.'''
         self._init_run()
         cap = self._cap
         while cap.isOpened():
             ret, frame = cap.read()
             if ret == True:
-                # Create projection with all the masks applied to original frame
+                # Create projection with all available masks applied to frame
                 projection = self._apply_settings(frame)                   
                 self._rotate_projection(projection)
                 if self._out != None:               # Save video to file
@@ -84,14 +103,14 @@ class Ghost(object):
                             (self.pyramid_size, self.pyramid_size))
 
     def stop(self):
-        '''Release everything if job is finished. And close the window.'''
+        '''Release everything if job is finished. And close the windows.'''
         self._cap.release()
         if self._out != None:
             self._out.release()
         cv2.destroyAllWindows()
 
     def _loop_video(self):
-        # self.source == video path
+        '''If self.loop_video == True - repeat video infinitely.'''
         if isinstance(self.source, str) and (self.loop_video):
             video_len = self._cap.get(cv2.CAP_PROP_FRAME_COUNT)
             cur_frame = self._cap.get(cv2.CAP_PROP_POS_FRAMES)
@@ -100,7 +119,7 @@ class Ghost(object):
                 self._cap.set(cv2.CAP_PROP_POS_FRAMES, 0)
 
     def _init_run(self):
-        '''Initializes output and adjustments'''
+        '''Initializes output and trackbars.'''
         self.count = 0
         def nothing(x):
             pass
@@ -134,7 +153,10 @@ class Ghost(object):
         cv2.createTrackbar('debugger', self.h, self.DEBUGGER_MODE, 1, nothing)
 
     def _get_trackbar_values(self):
-        '''Refreshes variables with Trackbars positions (self.pos - var dict)'''
+        '''Refreshes variables with Trackbars positions.
+        Returns: 
+            self.pos -- positions, states and coeficients dict
+        '''
         self.pos['scr_width'] = max(cv2.getTrackbarPos('fit width', self.h), \
                                     self.pyramid_size)
         self.scr_centre_x = self.pos['scr_width'] / 2
@@ -159,11 +181,11 @@ class Ghost(object):
         self.pos['debugger'] = cv2.getTrackbarPos('debugger', self.h)
 
     def _apply_settings(self, frame):
-        '''Apply custom settings from Trackbars.
+        '''Apply custom settings received from Trackbars (in self.pos).
         Args:
-            frame: original frame
+            frame -- original frame
         Returns:
-            result: modified frame according to user settings 
+            result -- modified frame according to users adjustments
         '''
         result = frame.copy()
         self._get_trackbar_values()
@@ -194,30 +216,34 @@ class Ghost(object):
         return result
 
     def _rotate_projection(self, projection):
-        '''Create FOUR projections rotated by -90 deg'''
+        '''Create 4(by default) projections rotated by 90 deg. CCW
+        Args:
+            projection -- processed frame with triangle mask applied
+        Returns resulting proj. into self.screen var.
+        '''
         self.screen = np.zeros((self.pyramid_size, self.pos['scr_width'], 3),\
                                 np.uint8)
         for i in range(self.pos['projections']):
-            self._add(projection, blend=self.pos['m_blend'])
+            self._add_projection(projection, blend=self.pos['m_blend'])
             self.screen = self._rotate(self.screen, -90, self.scr_centre_x, \
                                        self.scr_centre_y)
 
     def _substract_bg(self, frame):
-        '''Apply Background Substraction on frame.
+        '''Apply Background Substraction from frame.
         Args:
-            frame: current frame
+            frame -- current frame
         Returns: 
-            fgmask: foreground mask
+            fgmask -- foreground mask
         '''
-        if not self._fgbg_flag:
+        if not self._bs_mog2_flag:
             # Create Background Substractor instance
-            self._fgbg = cv2.createBackgroundSubtractorMOG2(history=1000,\
+            self._bs_mog2 = cv2.createBackgroundSubtractorMOG2(history=1000,\
                                           varThreshold=25,\
                                           detectShadows=False)
-            self._fgbg_flag = True
+            self._bs_mog2_flag = True
         # Get FGMASK with MOG2
         gray = self._img_to_gray(frame)
-        fgmask = self._fgbg.apply(gray, learningRate=self.pos['BS_rate'])
+        fgmask = self._bs_mog2.apply(gray, learningRate=self.pos['BS_rate'])
         # Elliptical Kernel for morphology func
         kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE,( \
                                 self.pos['k_size'], self.pos['k_size']))
@@ -229,8 +255,17 @@ class Ghost(object):
         fgmask = cv2.dilate(fgmask, kernel, iterations=self.pos['iters'])        
         return fgmask
 
-    def _grab_cut(self, img, rect, iters=5):
-        ''' '''
+    @staticmethod
+    def _grab_cut(img, rect, iters=2):
+        '''GrabCut image segmentation. Background identification
+        Args:
+            img -- image (frame) to processing
+            rect -- rectangular area to be segmented. Tuple (x, y, w, h)
+            iters -- algorithm iterations
+        Returns:
+            gc_mask -- mask of foreground
+        '''
+        # Create additional args required for GrabCut
         bgdModel = np.zeros((1, 65), np.float64)
         fgdModel = np.zeros((1, 65), np.float64)
         height, width = img.shape[:2]
@@ -239,11 +274,18 @@ class Ghost(object):
                                 bgdModel, fgdModel, iters, \
                                 cv2.GC_INIT_WITH_RECT)
         # Substitutes all bg pixels(0,2) with sure background (0)
-        gc_mask = np.where((mask==2) | (mask==0), 0, 1).astype('uint8') 
+        gc_mask = np.where((mask == 2) | (mask == 0), 0, 1).astype('uint8') 
         return cv2.pyrUp(gc_mask)
 
-    def _faces_to_gc_rect(self, faces, default_val=0):
-        '''Scale up face rect 2 times. Convert to tuple'''
+    @staticmethod
+    def _faces_to_gc_rect(faces, default_val=0):
+        '''Scale up first found face coords by 2 times.
+        Args:
+            faces -- list of np.array([x,y,w,h]) coords of faces detected
+            default_val -- Flag: process faces list or used def value instead
+        Returns:
+            (x, y, w, h) -- scaled up coords in tuple format
+        '''
         if not default_val:
             M = np.array([[1, 0, -0.5, 0],              # Scale matrix
                           [0, 1, 0 , -0.5],
@@ -257,11 +299,11 @@ class Ghost(object):
     def _track_faces(self, img):
         '''Apply oval mask over faces detected in the image.
         Args:
-            img: image
+            img -- image
         Returns:
-            self.face_x: first detected face X coord.
-            self.face_y: first detected face Y coord.
-            img: image with the oval mask around the face
+            self.faces -- list of faces detected
+            self.gc_rect -- coords. tuple for GrabCut algorithm (x, y, w, h)
+            fgmask -- binary mask with faces highlighted with oval
         '''
         if not self._face_cascade_flag:
             # Create classifier instance
@@ -282,9 +324,9 @@ class Ghost(object):
     def _detect_faces(self, img):
         '''Detects faces on the image.
         Args:
-            img: image
+            img -- image
         Returns:
-            faces - list of (x,y,w,h) face coordinates
+            faces -- list of np.array([x,y,w,h]) face coordinates
         '''
         if not self._face_cascade.empty():
             gray = self._img_to_gray(img)
@@ -297,14 +339,17 @@ class Ghost(object):
                 return []
             return faces
 
-    def _create_triangle_mask(self, side=1.5, centre=MASK_CENTRE, bottom=MASK_BOTTOM):
-        '''Creates triangle mask. And saves to self.mask and self.mask_inv.
+    def _create_triangle_mask(self, side=MASK_SIDE, centre=MASK_CENTRE, \
+                              bottom=MASK_BOTTOM):
+        '''Creates triangle mask. Assigns to self.mask and its inverse to
+            self.mask_inv.
         Args:
-            height: original image HEIGHT
-            width: original image WIDTH
-            scale_x: scale mask height
-            scale_y: scale mask width
-            centre: move mask centre by Y axis
+            side -- scale factor of hypotenuse of triangle mask
+            centre -- centre of the mask in SCREEN
+            bottom -- scale factor of legs of triangle mask
+        Returns:
+            self.masks -- original mask
+            self.mask_inv -- mask inverse
         '''
         height = self.height
         width = self.width
@@ -329,11 +374,16 @@ class Ghost(object):
     @staticmethod
     def _apply_mask(img, mask):
         '''Apply mask to image'''
-
         return cv2.bitwise_and(img, img, mask=mask)
 
-    def _add(self, projection, blend=MASK_BLEND):
-        '''Adds PROJECTION to bottom centre of SCREEN'''
+    def _add_projection(self, projection, blend=MASK_BLEND):
+        '''Adds PROJECTION to bottom centre of SCREEN.
+        Args:
+            projection -- processed frame
+            blend -- position of the triang. mask on the frame
+        Returns:
+            self.screen -- image ready to project on Pyramide
+            '''
         p_height, p_width = projection.shape[:2]
         #Extract ROI
         x = self.scr_centre_x - p_width / 2    
@@ -347,10 +397,17 @@ class Ghost(object):
         self.screen[y : y + p_height, x : x + p_width] = dst
 
     def _debugger_mode(self, frame, projection):
+        '''Adds two additional windows for debugging and adjustments.
+        Args:
+            frame -- original frame from video input
+            projection -- processed frame
+        '''
         if self.pos['debugger']:
             frame = self._draw_rect(frame, [self.gc_rect])
             cv2.imshow('original', frame)
+            cv2.moveWindow('original', 0, 0)
             cv2.imshow('result', projection)
+            cv2.moveWindow('result', 0, self.height)
             self._debugger_off = False
         else:
             if not self._debugger_off:
@@ -361,6 +418,7 @@ class Ghost(object):
 
     @staticmethod
     def _draw_rect(img, faces):
+        '''Draw BLUE rectangle on img.'''
         for (x, y, w, h) in faces:
             img = cv2.rectangle(img, (x, y), (x + w, y + h), (255, 0, 0), 2)
         return img
@@ -369,20 +427,20 @@ class Ghost(object):
     def _draw_ellipse(img, faces):
         '''Draws solid filled white ellipse fitted into rectangle area.
         Args:
-            img: image
-            faces: list of (x,y,w,h) face coordinates (rectangles)
+            img -- image (frame)
+            faces -- ist of np.array([x,y,w,h]) face coordinates
         Returns:
-            result: img with white elipses
+            result -- img with white elipses
         '''
         for (x, y, w, h) in faces:
-            img = cv2.ellipse(img, (x + w // 2, y + h // 2), \
+            result = cv2.ellipse(img, (x + w // 2, y + h // 2), \
                                     (w // 2, int(h / 1.5)), \
                                     0, 0, 360, (255, 255, 255), -1)
-        return img
+        return result
 
     @staticmethod
     def _img_to_gray(img):
-        '''Converts frame to Grayscale, adjust contrast.'''
+        '''Converts img (frame) to Grayscale, adjust contrast.'''
         img = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
         return cv2.equalizeHist(img) # Adj. contrast
 
@@ -397,11 +455,11 @@ class Ghost(object):
     def _rotate(img, angle, anchor_x, anchor_y):
         '''Rotates image about anchor point
         Args:
-            img: image
-            angel: angle to rotate
-            anchor_x, anchor_y: anchor coordinates to rotate about.
+            img -- image
+            angel -- angle to rotate
+            anchor_x, anchor_y -- anchor coordinates to rotate about.
         Returns:
-            rotated image (no scaling)
+            result -- rotated image (no scaling)
         '''
         height, width = img.shape[:2]
         M = cv2.getRotationMatrix2D((anchor_x, anchor_y), angle, 1)
@@ -415,18 +473,11 @@ class Ghost(object):
         return result
 
     def _show(self, img):
+        '''Shows img in the 'show' window'''
         cv2.imshow('show', img)
-
         k = cv2.waitKey(0) & 0xFF
-
         if k == 27:     # ESC key
             cv2.destroyWindow('show')
-
-    @staticmethod
-    def _show_plt(img):
-        plt.imshow(img, cmap='gray', interpolation='bicubic')
-        plt.show()
-
 
 if __name__ == '__main__':
     #ghost = Ghost('/home/chip/pythoncourse/hologram2/test.mp4')
