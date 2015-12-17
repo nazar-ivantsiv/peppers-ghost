@@ -21,6 +21,8 @@ mode.
 attributes. In the bottom is a 'debugger' trackbar to turn on debugger mode.
 
 Key 'q' - To quit
+Key 'd' - Debugger windows (on/off)
+
 ==============================================================================
 '''
 
@@ -30,6 +32,8 @@ from os import getcwd
 
 import numpy as np
 import cv2
+import Tkinter
+from PIL import Image, ImageTk
 
 # Features for CascadeClassifier (frontal face)
 HAAR_CASCADE_PATH = 'haarcascade_frontalface_default.xml'
@@ -78,6 +82,7 @@ class Ghost(object):
         while cap.isOpened():
             ret, frame = cap.read()
             if ret == True:
+
                 # Create projection with all available masks applied to frame
                 projection = self._apply_settings(frame)                   
                 self._rotate_projection(projection)
@@ -85,8 +90,13 @@ class Ghost(object):
                     self._out.write(self.screen)
                 cv2.imshow('screen', self.screen)   # Output SCREEN to window
                 self._loop_video()                  # Loop the video
-                if cv2.waitKey(1) & 0xFF == ord('q'): # Wait for 'q' to exit
+
+                key_pressed = 0xFF & cv2.waitKey(1)
+                if key_pressed == ord('q'):         # Wait for 'q' to exit
                     break
+                elif key_pressed == ord('d'):       # Debugger windows(on/off)
+                    self.DEBUGGER_MODE = not self.DEBUGGER_MODE
+
                 self._debugger_mode(frame, projection)
             else:
                 break
@@ -100,7 +110,8 @@ class Ghost(object):
         print('Writing video to: {}'.format(file_path))
         fourcc = cv2.VideoWriter_fourcc(*'XVID')
         self._out = cv2.VideoWriter(file_path, fourcc, 20.0, \
-                            (self.pyramid_size, self.pyramid_size))
+                            (self.width * 2, self.height * 2))
+        print(self.width * 2, self.height * 2)
 
     def stop(self):
         '''Release everything if job is finished. And close the windows.'''
@@ -108,6 +119,20 @@ class Ghost(object):
         if self._out != None:
             self._out.release()
         cv2.destroyAllWindows()
+
+    @staticmethod
+    def _brightness_contrast(img, alpha, beta):
+        '''Adjust brightness and contrast.
+        Args:
+            alpha --
+            beta -- 
+        Returns:
+            result --
+        '''
+        result = np.zeros((img.shape[0], img.shape[1], 3), np.uint8)
+        for i in range(3):
+            result[:, :, i] = cv2.add(cv2.multiply(img[:, :, i], alpha), beta)
+        return result
 
     def _loop_video(self):
         '''If self.loop_video == True - repeat video infinitely.'''
@@ -123,6 +148,7 @@ class Ghost(object):
         self.count = 0
         def nothing(x):
             pass
+        
         cv2.namedWindow(self.h, cv2.WINDOW_NORMAL)
         cv2.namedWindow('screen', cv2.WINDOW_NORMAL)
         cv2.setWindowProperty("screen", cv2.WND_PROP_FULLSCREEN, \
@@ -144,11 +170,14 @@ class Ghost(object):
         cv2.createTrackbar('loop video', self.h, self.loop_video, 1, nothing)
         cv2.createTrackbar('Track Faces', self.h, 0, 1, nothing)
         cv2.createTrackbar('  GrabCut iters', self.h, 0, 5, nothing)
-        cv2.createTrackbar('BS:', self.h, 0, 1, nothing)
-        cv2.createTrackbar('  BS learn.rate', self.h, 20, 50, nothing)
-        cv2.createTrackbar('  dilation kernel size', self.h, 5, 20, nothing)
-        cv2.createTrackbar('  dilation iters', self.h, 3, 10, nothing)
-        cv2.createTrackbar('debugger', self.h, self.DEBUGGER_MODE, 1, nothing)
+        cv2.createTrackbar('contrast', self.h, 10, 30, nothing)
+        cv2.createTrackbar('brightness', self.h, 0, 200, nothing)
+
+        #cv2.createTrackbar('BS:', self.h, 0, 1, nothing)
+        #cv2.createTrackbar('  BS learn.rate', self.h, 20, 50, nothing)
+        #cv2.createTrackbar('  dilation kernel size', self.h, 5, 20, nothing)
+        #cv2.createTrackbar('  dilation iters', self.h, 3, 10, nothing)
+        #cv2.createTrackbar('debugger', self.h, self.DEBUGGER_MODE, 1, nothing)
 
     def _get_trackbar_values(self):
         '''Refreshes variables with Trackbars positions.
@@ -170,12 +199,15 @@ class Ghost(object):
         self.loop_video = cv2.getTrackbarPos('loop video', self.h)
         self.pos['tracking_on'] = cv2.getTrackbarPos('Track Faces', self.h)
         self.pos['gc_iters'] = cv2.getTrackbarPos('  GrabCut iters', self.h)
-        self.pos['BS_on'] = cv2.getTrackbarPos('BS:', self.h)
-        self.pos['BS_rate'] = cv2.getTrackbarPos('  BS learn.rate', self.h) / 10000
-        self.pos['k_size'] = cv2.getTrackbarPos('  dilation kernel size', \
-                                                self.h) or 1
-        self.pos['iters'] = cv2.getTrackbarPos('  dilation iters', self.h)
-        self.pos['debugger'] = cv2.getTrackbarPos('debugger', self.h)
+        self.pos['contrast'] = cv2.getTrackbarPos('contrast', self.h) / 10
+        self.pos['brightness'] = cv2.getTrackbarPos('brightness', self.h)
+
+        self.pos['BS_on'] = 0#cv2.getTrackbarPos('BS:', self.h)
+        #self.pos['BS_rate'] = cv2.getTrackbarPos('  BS learn.rate', self.h) / 10000
+        #self.pos['k_size'] = cv2.getTrackbarPos('  dilation kernel size', \
+        #                                        self.h) or 1
+        #self.pos['iters'] = cv2.getTrackbarPos('  dilation iters', self.h)
+        #self.pos['debugger'] = cv2.getTrackbarPos('debugger', self.h)
 
     def _apply_settings(self, frame):
         '''Apply custom settings received from Trackbars (in self.pos).
@@ -186,6 +218,10 @@ class Ghost(object):
         '''
         result = frame.copy()
         self._get_trackbar_values()
+
+        result = self._brightness_contrast(result, self.pos['contrast'], \
+                                   self.pos['brightness'])
+
         # Translate image to (i_x, i_y)
         if (self.pos['i_x'] != 0)or(self.pos['i_y'] != 0):
             result = self._translate(result, int(self.pos['i_x']), \
@@ -205,6 +241,7 @@ class Ghost(object):
                 result = self._apply_mask(result, gc_mask)
             else:
                 result = self._apply_mask(result, tr_mask)
+
         # Create/Apply triangle mask
         self._create_triangle_mask(side=self.pos['m_side'], \
                                     centre=self.pos['m_cntr'], \
@@ -399,7 +436,7 @@ class Ghost(object):
             frame -- original frame from video input
             projection -- processed frame
         '''
-        if self.pos['debugger']:
+        if self.DEBUGGER_MODE:
             frame = self._draw_rect(frame, [self.gc_rect])
             cv2.imshow('original', frame)
             cv2.moveWindow('original', 0, 0)
@@ -411,7 +448,6 @@ class Ghost(object):
                 cv2.destroyWindow('original')
                 cv2.destroyWindow('result')
                 self._debugger_off = True
-
 
     @staticmethod
     def _draw_rect(img, faces):
@@ -477,10 +513,10 @@ class Ghost(object):
             cv2.destroyWindow('show')
 
 if __name__ == '__main__':
-    #ghost = Ghost('/home/chip/pythoncourse/hologram2/test.mp4')
+    #ghost = Ghost('/home/chip/pythoncourse/hologram2/test3.mp4')
     ghost = Ghost()
 
-    #path = getcwd() + '/out.avi'
-    #ghost.set_output(path)
+    #path = getcwd()
+    #ghost.set_output(path+'/out.avi')
 
     ghost.run()
