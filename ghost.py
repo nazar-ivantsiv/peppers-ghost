@@ -32,8 +32,6 @@ from os import getcwd
 
 import numpy as np
 import cv2
-import Tkinter
-from PIL import Image, ImageTk
 
 # Features for CascadeClassifier (frontal face)
 HAAR_CASCADE_PATH = 'haarcascade_frontalface_default.xml'
