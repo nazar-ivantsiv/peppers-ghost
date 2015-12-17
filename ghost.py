@@ -69,7 +69,6 @@ class Ghost(object):
         self.faces = [np.array([x - a, y - a, x, y])]
         self.gc_rect = (x - a, y - a, x, y)     # GrabCut default rect
         self.def_face = self.faces              # Default value (rect in centre)
-        self._bs_mog2_flag = False              # Flag: BS instance created
         self._face_cascade_flag = False         # Flag: Cascade clsfr for GC
         self._debugger_off = not self.DEBUGGER_MODE # Flag: debugger status
 
@@ -122,10 +121,10 @@ class Ghost(object):
     def _brightness_contrast(img, alpha, beta):
         '''Adjust brightness and contrast.
         Args:
-            alpha --
-            beta -- 
+            alpha -- contrast coefficient (1.0 - 3.0)
+            beta -- brightness increment (0 - 100)
         Returns:
-            result --
+            result -- image with adjustments applied
         '''
         result = np.zeros((img.shape[0], img.shape[1], 3), np.uint8)
         for i in range(3):
@@ -169,13 +168,7 @@ class Ghost(object):
         cv2.createTrackbar('Track Faces', self.h, 0, 1, nothing)
         cv2.createTrackbar('  GrabCut iters', self.h, 0, 5, nothing)
         cv2.createTrackbar('contrast', self.h, 10, 30, nothing)
-        cv2.createTrackbar('brightness', self.h, 0, 200, nothing)
-
-        #cv2.createTrackbar('BS:', self.h, 0, 1, nothing)
-        #cv2.createTrackbar('  BS learn.rate', self.h, 20, 50, nothing)
-        #cv2.createTrackbar('  dilation kernel size', self.h, 5, 20, nothing)
-        #cv2.createTrackbar('  dilation iters', self.h, 3, 10, nothing)
-        #cv2.createTrackbar('debugger', self.h, self.DEBUGGER_MODE, 1, nothing)
+        cv2.createTrackbar('brightness', self.h, 0, 100, nothing)
 
     def _get_trackbar_values(self):
         '''Refreshes variables with Trackbars positions.
@@ -200,13 +193,6 @@ class Ghost(object):
         self.pos['contrast'] = cv2.getTrackbarPos('contrast', self.h) / 10
         self.pos['brightness'] = cv2.getTrackbarPos('brightness', self.h)
 
-        self.pos['BS_on'] = 0#cv2.getTrackbarPos('BS:', self.h)
-        #self.pos['BS_rate'] = cv2.getTrackbarPos('  BS learn.rate', self.h) / 10000
-        #self.pos['k_size'] = cv2.getTrackbarPos('  dilation kernel size', \
-        #                                        self.h) or 1
-        #self.pos['iters'] = cv2.getTrackbarPos('  dilation iters', self.h)
-        #self.pos['debugger'] = cv2.getTrackbarPos('debugger', self.h)
-
     def _apply_settings(self, frame):
         '''Apply custom settings received from Trackbars (in self.pos).
         Args:
@@ -224,10 +210,6 @@ class Ghost(object):
         if (self.pos['i_x'] != 0)or(self.pos['i_y'] != 0):
             result = self._translate(result, int(self.pos['i_x']), \
                                     int(self.pos['i_y']))
-        # Background Substraction (if ON)
-        if self.pos['BS_on']:
-            bs_mask = self._substract_bg(result)
-            result = self._apply_mask(result, bs_mask)
         # Apply face detection mask (if ON)
         if self.pos['tracking_on']:
             tr_mask = self._track_faces(result)
