@@ -69,7 +69,8 @@ class Ghost(object):
         self.faces = [np.array([x - a, y - a, x, y])]
         self.gc_rect = (x - a, y - a, x, y)     # GrabCut default rect
         self.def_face = self.faces              # Default value (rect in centre)
-        self._face_cascade_flag = False         # Flag: Cascade clsfr for GC
+        # Cascade clsfr GC instanece
+        self._face_cascade = cv2.CascadeClassifier(HAAR_CASCADE_PATH)
         self._debugger_off = not self.DEBUGGER_MODE # Flag: debugger status
 
     def run(self):
@@ -270,7 +271,7 @@ class Ghost(object):
         return fgmask
 
     @staticmethod
-    def _grab_cut(img, rect, iters=2):
+    def _grab_cut(img, rect=None, iters=2):
         '''GrabCut image segmentation. Background identification
         Args:
             img -- image (frame) to processing
@@ -319,10 +320,6 @@ class Ghost(object):
             self.gc_rect -- coords. tuple for GrabCut algorithm (x, y, w, h)
             fgmask -- binary mask with faces highlighted with oval
         '''
-        if not self._face_cascade_flag:
-            # Create classifier instance
-            self._face_cascade = cv2.CascadeClassifier(HAAR_CASCADE_PATH)
-            self._face_cascade_flag = True
         faces = self._detect_faces(img)
         if faces != []:                              # Face coords detected
             self.faces = faces
