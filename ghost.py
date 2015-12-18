@@ -69,9 +69,9 @@ class Ghost(object):
         self.faces = [np.array([x - a, y - a, x, y])]
         self.gc_rect = (x - a, y - a, x, y)     # GrabCut default rect
         self.def_face = self.faces              # Default value (rect in centre)
-        # Cascade clsfr GC instanece
-        self._face_cascade = cv2.CascadeClassifier(HAAR_CASCADE_PATH)
+        self._face_cascade_flag = False         # Flag: Cascade clsfr for GC
         self._debugger_off = not self.DEBUGGER_MODE # Flag: debugger status
+        self.fullscreen = cv2.WINDOW_FULLSCREEN
 
     def run(self):
         '''Video processing.'''
@@ -94,6 +94,10 @@ class Ghost(object):
                     break
                 elif key_pressed == ord('d'):       # Debugger windows(on/off)
                     self.DEBUGGER_MODE = not self.DEBUGGER_MODE
+                elif key_pressed == ord('f'):
+                    self.fullscreen = not self.fullscreen
+                    cv2.setWindowProperty("screen", cv2.WND_PROP_FULLSCREEN, \
+                                          self.fullscreen)
 
                 self._debugger_mode(frame, projection)
             else:
@@ -149,8 +153,8 @@ class Ghost(object):
         
         cv2.namedWindow(self.h, cv2.WINDOW_NORMAL)
         cv2.namedWindow('screen', cv2.WINDOW_NORMAL)
-        cv2.setWindowProperty("screen", cv2.WND_PROP_FULLSCREEN, \
-                              cv2.WINDOW_FULLSCREEN)
+        #cv2.setWindowProperty("screen", cv2.WND_PROP_FULLSCREEN, \
+        #                      cv2.WINDOW_FULLSCREEN)
         cv2.createTrackbar('fit width', self.h, int(self.width * 2),\
                            self.width * 4, nothing)
         cv2.createTrackbar('mask centre', self.h, int(self.MASK_CENTRE * 100),\
@@ -320,6 +324,10 @@ class Ghost(object):
             self.gc_rect -- coords. tuple for GrabCut algorithm (x, y, w, h)
             fgmask -- binary mask with faces highlighted with oval
         '''
+        if not self._face_cascade_flag:
+            # Create classifier instance
+            
+            self._face_cascade_flag = True
         faces = self._detect_faces(img)
         if faces != []:                              # Face coords detected
             self.faces = faces
