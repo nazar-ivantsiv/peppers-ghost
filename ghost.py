@@ -22,11 +22,11 @@ attributes. In the bottom is a 'debugger' trackbar to turn on debugger mode.
 
 Key 'q' - To quit
 Key 'd' - Debugger windows (on/off)
+Key 'f' - Fullscreen mode (on/off)
 
 ==============================================================================
 '''
 
-# -*- coding: utf-8 -*-
 from __future__ import division
 from os import getcwd
 
@@ -326,7 +326,7 @@ class Ghost(object):
         '''
         if not self._face_cascade_flag:
             # Create classifier instance
-            
+            self._face_cascade = cv2.CascadeClassifier(HAAR_CASCADE_PATH)
             self._face_cascade_flag = True
         faces = self._detect_faces(img)
         if faces != []:                              # Face coords detected
