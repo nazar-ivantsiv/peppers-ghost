@@ -23,7 +23,6 @@ attributes. In the bottom is a 'debugger' trackbar to turn on debugger mode.
 Key 'q' - To quit
 Key 'd' - Debugger windows (on/off)
 Key 'f' - Fullscreen mode (on/off)
-
 ==============================================================================
 """
 
@@ -33,7 +32,6 @@ from os import getcwd
 import numpy as np
 import cv2
 
-# GUI for Peppers Ghost
 from modules import gui
 
 # Features for CascadeClassifier (frontal face)
@@ -43,17 +41,13 @@ class Ghost(object):
     """Pepper's Ghost video processor."""
 
     def __init__(self, source=0):
-        """Args:
-            source -- camera (0, 1) or vieofile
-        """
         self.source = source                    # Input source num/path
-        self.h = 'SETTINGS'
-        self._cap = cv2.VideoCapture(self.source)
+        self._cap = cv2.VideoCapture(source)
         if not self._cap.isOpened():
             self._cap.open()                    # Input source instance
-        self._out = None                        # Output source instance(file)
         self.height = int(self._cap.get(4))     # Frame height
         self.width = int(self._cap.get(3))      # Frame width
+        self._out = None                        # Output source instance
         self.scr_height = self.height * 2       # Scr height
         self.scr_width = self.width * 2         # Scr width
         self.scr_centre_x = self.width          # Scr centre y
@@ -68,6 +62,7 @@ class Ghost(object):
         self._face_cascade_flag = False         # Flag: Cascade clsfr for GC
 
         self.gui = gui.Gui(self.height, self.width)
+        self.pos = self.gui.pos
 
     def run(self):
         """Video processing."""
@@ -81,7 +76,8 @@ class Ghost(object):
 
                 if self._out != None:               # Save video to file
                     self._out.write(self.screen)
-                cv2.imshow(self.gui.S_HDR, self.screen)   # Output SCREEN to window
+
+                self.gui.preview(self.screen)       # Preview SCREEN
 # MOVE THIS TO OUTPUT cls
                 self._loop_video()                  # Loop the video 
 
@@ -144,39 +140,39 @@ class Ghost(object):
 
 
     def _apply_settings(self, frame):
-        """Apply custom settings received from GUI (in self.gui.pos).
+        """Apply custom settings received from GUI (in self.pos).
         Args:
             frame -- original frame
         Returns:
             result -- modified frame according to users adjustments
         """
         self.gui.get_trackbar_values()
-        self.scr_width = self.gui.pos['scr_width']
+        self.scr_width = self.pos['scr_width']
         self.scr_centre_x = self.scr_width / 2
-        self.loop_video = self.gui.pos['loop_video']
-
-        result = frame.copy()
-        result = self._brightness_contrast(result, self.gui.pos['contrast'], \
-                                   self.gui.pos['brightness'])
+        self.loop_video = self.pos['loop_video']
         # Translate image to (i_x, i_y)
-        if (self.gui.pos['i_x'] != 0)or(self.gui.pos['i_y'] != 0):
-            result = self._translate(result, int(self.gui.pos['i_x']), \
-                                    int(self.gui.pos['i_y']))
+        if (self.pos['i_x'] != 0)or(self.pos['i_y'] != 0):
+            frame = self._translate(frame, int(self.pos['i_x']), \
+                                    int(self.pos['i_y']))
+# Put SCALING HERE (use frame var)
+        result = frame.copy()
+        result = self._brightness_contrast(result, self.pos['contrast'], \
+                                   self.pos['brightness'])
         # Apply face detection mask (if ON)
-        if self.gui.pos['tracking_on']:
+        if self.pos['tracking_on']:
             tr_mask = self._track_faces(frame)
             # GrabCut face(fg) extraction
-            if self.gui.pos['gc_iters'] > 0:
+            if self.pos['gc_iters'] > 0:
                 gc_mask = self._grab_cut(img=frame, \
                                          rect=self.gc_rect, \
-                                         iters=self.gui.pos['gc_iters'])
+                                         iters=self.pos['gc_iters'])
                 result = self._apply_mask(result, gc_mask)
             else:
                 result = self._apply_mask(result, tr_mask)
         # Create/Apply triangle mask
-        self._create_triangle_mask(side=self.gui.pos['m_side'], \
-                                    centre=self.gui.pos['m_cntr'], \
-                                    bottom=self.gui.pos['m_btm'])
+        self._create_triangle_mask(side=self.pos['m_side'], \
+                                    centre=self.pos['m_cntr'], \
+                                    bottom=self.pos['m_btm'])
         result = self._apply_mask(result, self.mask)
         return result
 
@@ -188,8 +184,8 @@ class Ghost(object):
         """
         self.screen = np.zeros((self.scr_height, self.scr_width,\
                                  3), np.uint8)
-        for i in range(self.gui.pos['projections']):
-            self._add_projection(projection, blend=self.gui.pos['m_blend'])
+        for i in range(self.pos['projections']):
+            self._add_projection(projection, blend=self.pos['m_blend'])
             self.screen = self._rotate(self.screen, -90, self.scr_centre_x, \
                                        self.scr_centre_y)
 
@@ -208,16 +204,16 @@ class Ghost(object):
             self._bs_mog2_flag = True
         # Get FGMASK with MOG2
         gray = self._img_to_gray(frame)
-        fgmask = self._bs_mog2.apply(gray, learningRate=self.gui.pos['BS_rate'])
+        fgmask = self._bs_mog2.apply(gray, learningRate=self.pos['BS_rate'])
         # Elliptical Kernel for morphology func
         kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE,( \
-                                self.gui.pos['k_size'], self.gui.pos['k_size']))
+                                self.pos['k_size'], self.pos['k_size']))
         # Open (remove white points from the background)
         fgmask = cv2.morphologyEx(fgmask, cv2.MORPH_OPEN, kernel)
         # Close (remove black points from the object)
         fgmask = cv2.morphologyEx(fgmask, cv2.MORPH_CLOSE, kernel)
         # Dilation alg (increases white regions size)
-        fgmask = cv2.dilate(fgmask, kernel, iterations=self.gui.pos['iters'])        
+        fgmask = cv2.dilate(fgmask, kernel, iterations=self.pos['iters'])        
         return fgmask
 
     @staticmethod

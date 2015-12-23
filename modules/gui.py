@@ -3,7 +3,25 @@ from . import cv2
 from . import np
 
 class Gui(object):
-    """docstring for Gui"""
+    """GUI for Pepper's Ghost video processor.
+    Args:
+        height -- output screen original height
+        width -- output screen original width
+    Returns:
+        self.pos['scr_width'] -- screen width
+        self.pos['m_cntr'] -- mask vertical position on frame (d. MASK_CENTRE)
+        self.pos['m_btm'] -- mask bottom edge position (def. MASK_BOTTOM)
+        self.pos['m_side'] -- distance between mask side corners (d. MASK_SIDE)
+        self.pos['m_blend'] -- blends 4 mask projections (def. MASK_BLEND)
+        self.pos['i_x'] -- frame x pos
+        self.pos['i_y'] -- frame y pos
+        self.pos['projections'] -- projections qty (def. 4)
+        self.pos['loop_video'] -- on/off
+        self.pos['tracking_on'] -- FaceTracking on/off
+        self.pos['gc_iters'] -- GrabCut iterations
+        self.pos['contrast'] -- contrast adj.
+        self.pos['brightness'] -- brightness adj.
+    """
     DEBUGGER_MODE = 0                           # Flag: debugger mode off
     MASK_CENTRE = 0                             # Centre of the mask in SCREEN
     MASK_BOTTOM = 1                             # Mask bottom corner position
@@ -13,10 +31,9 @@ class Gui(object):
     S_HDR = 'SCREEN'                            # Screen window header
 
     def __init__(self, height, width):
-        """Initializes windows and trackbars."""
         self.height = height
         self.width = width
-        self.pos = {}                               # Trackbar positions
+        self.pos = {}                             # Trackbar positions
         self.fullscreen = not cv2.WINDOW_FULLSCREEN
         self.loop_video = 1                         # Flag: loop video
         self._debugger_off = not self.DEBUGGER_MODE # Flag: debugger status
@@ -70,6 +87,9 @@ class Gui(object):
         self.pos['contrast'] = cv2.getTrackbarPos('contrast', self.C_HDR) / 10
         self.pos['brightness'] = cv2.getTrackbarPos('brightness', self.C_HDR)
 
+    def preview(self, screen):
+        cv2.imshow(self.S_HDR, screen)
+
     def toggle_fullscreen(self):
         """Switches SCREEN window fullscreen mode on/off"""
         self.fullscreen = not self.fullscreen
@@ -77,6 +97,7 @@ class Gui(object):
                               self.fullscreen)
 
     def toggle_debugger(self):
+        """Switches DEBUGGER windows on/off"""
         self.DEBUGGER_MODE = not self. DEBUGGER_MODE
         if self.DEBUGGER_MODE:
             self._debugger_off = False
@@ -89,11 +110,10 @@ class Gui(object):
     def debugger_show(self, frame, projection):
         """Adds two additional windows for debugging and adjustments.
         Args:
-            frame -- original frame from video input
+            frame -- original frame from video input, with face highlited
             projection -- processed frame
         """
-        if self.DEBUGGER_MODE:
-            cv2.imshow('original', frame)
-            cv2.moveWindow('original', 0, 0)
-            cv2.imshow('result', projection)
-            cv2.moveWindow('result', 0, self.height)
+        cv2.imshow('original', frame)
+        cv2.moveWindow('original', 0, 0)
+        cv2.imshow('result', projection)
+        cv2.moveWindow('result', 0, self.height)
