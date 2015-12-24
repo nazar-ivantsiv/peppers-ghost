@@ -32,7 +32,8 @@ from os import getcwd
 import numpy as np
 import cv2
 
-from modules import gui
+from modules.gui import Gui
+from modules.capture import Capture
 
 # Features for CascadeClassifier (frontal face)
 HAAR_CASCADE_PATH = 'haarcascade_frontalface_default.xml'
@@ -40,13 +41,11 @@ HAAR_CASCADE_PATH = 'haarcascade_frontalface_default.xml'
 class Ghost(object):
     """Pepper's Ghost video processor."""
 
-    def __init__(self, source=0):
-        self.source = source                    # Input source num/path
-        self._cap = cv2.VideoCapture(source)
-        if not self._cap.isOpened():
-            self._cap.open()                    # Input source instance
-        self.height = int(self._cap.get(4))     # Frame height
-        self.width = int(self._cap.get(3))      # Frame width
+    def __init__(self):
+        self.cap = Capture()                    # Input instance:
+                                                # def. source == 0 (webcamera)
+        self.height = self.cap.height           # Frame height
+        self.width = self.cap.width             # Frame width
         self._out = None                        # Output source instance
         self.scr_height = self.height * 2       # Scr height
         self.scr_width = self.width * 2         # Scr width
@@ -61,39 +60,33 @@ class Ghost(object):
         self.def_face = self.faces              # Default value (rect in centre)
         self._face_cascade_flag = False         # Flag: Cascade clsfr for GC
 
-        self.gui = gui.Gui(self.height, self.width)
-        self.pos = self.gui.pos
+        self.gui = Gui(self.height, self.width) # GUI instance
+        self.pos = self.gui.pos                 # Dict with trackbars values
 
     def run(self):
         """Video processing."""
-        cap = self._cap
-        while cap.isOpened():
-            ret, frame = cap.read()
-            if ret == True:
-                # Create projection with all available masks applied to frame
-                projection = self._apply_settings(frame)
-                self._rotate_projection(projection)
+        while self.cap.is_opened():
+            frame = self.cap.next_frame()            
+            # Create projection with all available masks applied to frame
+            projection = self._apply_settings(frame)
+            self._rotate_projection(projection)
 
-                if self._out != None:               # Save video to file
-                    self._out.write(self.screen)
+            if self._out != None:               # Save video to file
+                self._out.write(self.screen)
 
-                self.gui.preview(self.screen)       # Preview SCREEN
-# MOVE THIS TO OUTPUT cls
-                self._loop_video()                  # Loop the video 
+            self.gui.preview(self.screen)       # Preview into SCREEN window
 
-                key_pressed = 0xFF & cv2.waitKey(1)
-                if key_pressed == ord('q'):         # Wait for 'q' to exit
-                    break
-                elif key_pressed == ord('d'):       # Debugger windows(on/off)
-                    self.gui.toggle_debugger()
-                elif key_pressed == ord('f'):       # Fullscreen on/off
-                    self.gui.toggle_fullscreen()
-
-                if self.gui.DEBUGGER_MODE:          # Shows debugger win if ON
-                    frame = self._draw_rect(frame, [self.gc_rect])
-                    self.gui.debugger_show(frame, projection)
-            else:
+            key_pressed = 0xFF & cv2.waitKey(1)
+            if key_pressed == ord('q'):         # Wait for 'q' to exit
                 break
+            elif key_pressed == ord('d'):       # Debugger windows(on/off)
+                self.gui.toggle_debugger()
+            elif key_pressed == ord('f'):       # Fullscreen on/off
+                self.gui.toggle_fullscreen()
+
+            if self.gui.DEBUGGER_MODE:          # Shows debugger win if ON
+                frame = self._draw_rect(frame, [self.gc_rect])
+                self.gui.debugger_show(frame, projection)
         self.stop()
 
     def set_output(self, file_path):
@@ -109,10 +102,10 @@ class Ghost(object):
 
     def stop(self):
         """Release everything if job is finished. And close the windows."""
-        self._cap.release()
+        self.cap.stop()
         if self._out != None:
             self._out.release()
-        cv2.destroyAllWindows()
+        self.gui.exit()
 
     @staticmethod
     def _brightness_contrast(img, alpha, beta):
@@ -128,17 +121,6 @@ class Ghost(object):
             result[:, :, i] = cv2.add(cv2.multiply(img[:, :, i], alpha), beta)
         return result
 
-    def _loop_video(self):
-        """If self.loop_video == True - repeat video infinitely."""
-        if isinstance(self.source, str) and (self.loop_video):
-            video_len = self._cap.get(cv2.CAP_PROP_FRAME_COUNT)
-            cur_frame = self._cap.get(cv2.CAP_PROP_POS_FRAMES)
-            print('frame: {}/{}'.format(cur_frame, video_len))
-            if self.loop_video and (cur_frame == video_len):
-                self._cap.set(cv2.CAP_PROP_POS_FRAMES, 0)
-
-
-
     def _apply_settings(self, frame):
         """Apply custom settings received from GUI (in self.pos).
         Args:
@@ -149,7 +131,7 @@ class Ghost(object):
         self.gui.get_trackbar_values()
         self.scr_width = self.pos['scr_width']
         self.scr_centre_x = self.scr_width / 2
-        self.loop_video = self.pos['loop_video']
+        self.cap.loop_video = self.pos['loop_video']
         # Translate image to (i_x, i_y)
         if (self.pos['i_x'] != 0)or(self.pos['i_y'] != 0):
             frame = self._translate(frame, int(self.pos['i_x']), \

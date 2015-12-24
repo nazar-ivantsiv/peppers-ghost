@@ -117,3 +117,6 @@ class Gui(object):
         cv2.moveWindow('original', 0, 0)
         cv2.imshow('result', projection)
         cv2.moveWindow('result', 0, self.height)
+
+    def exit(self):
+        cv2.destroyAllWindows()
