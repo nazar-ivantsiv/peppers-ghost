@@ -2,11 +2,12 @@ from __future__ import division
 from . import cv2
 from . import np
 
+
 class Gui(object):
     """GUI for Pepper's Ghost video processor.
     Args:
-        height -- output screen original height
-        width -- output screen original width
+        height -- output SCREEN original height
+        width -- output SCREEN original width
     Returns:
         self.pos['scr_width'] -- screen width
         self.pos['m_cntr'] -- mask vertical position on frame (d. MASK_CENTRE)
@@ -33,9 +34,8 @@ class Gui(object):
     def __init__(self, height, width):
         self.height = height
         self.width = width
-        self.pos = {}                             # Trackbar positions
-        self.fullscreen = not cv2.WINDOW_FULLSCREEN
-        self.loop_video = 1                         # Flag: loop video
+        self.pos = {}                               # Trackbar positions
+        self.fullscreen = not cv2.WINDOW_FULLSCREEN # Flag: fullscreen (off)
         self._debugger_off = not self.DEBUGGER_MODE # Flag: debugger status
 
         def nothing(x):
@@ -43,23 +43,22 @@ class Gui(object):
         
         cv2.namedWindow(self.C_HDR, cv2.WINDOW_NORMAL)
         cv2.namedWindow(self.S_HDR, cv2.WINDOW_NORMAL)
-        #cv2.setWindowProperty("screen", cv2.WND_PROP_FULLSCREEN, \
-        #                      cv2.WINDOW_FULLSCREEN)
         cv2.createTrackbar('fit width', self.C_HDR, int(self.width * 2),\
                            self.width * 4, nothing)
         cv2.createTrackbar('mask centre', self.C_HDR, int(self.MASK_CENTRE * 100),\
                            100, nothing)
         cv2.createTrackbar('mask bottom', self.C_HDR, int(self.MASK_BOTTOM * 100),\
                            100, nothing)
-        cv2.createTrackbar('mask side', self.C_HDR, 150, 200, nothing)
+        cv2.createTrackbar('mask side', self.C_HDR, 150, 400, nothing)
         cv2.createTrackbar('mask blend', self.C_HDR, int(self.MASK_BLEND * 1000),\
                            1000, nothing)
         cv2.createTrackbar('image x', self.C_HDR, int(self.width / 2), self.width,\
                              nothing)
         cv2.createTrackbar('image y', self.C_HDR, int(self.height / 2), \
                            self.height, nothing)
-        cv2.createTrackbar('projections', self.C_HDR, 4, 4, nothing)
-        cv2.createTrackbar('loop video', self.C_HDR, self.loop_video, 1, nothing)
+        cv2.createTrackbar('angle', self.C_HDR, 90, 90, nothing)
+        cv2.createTrackbar('projections', self.C_HDR, 4, 10, nothing)
+        cv2.createTrackbar('loop video', self.C_HDR, 1, 1, nothing)
         cv2.createTrackbar('Track Faces', self.C_HDR, 0, 1, nothing)
         cv2.createTrackbar('  GrabCut iters', self.C_HDR, 0, 5, nothing)
         cv2.createTrackbar('contrast', self.C_HDR, 10, 30, nothing)
@@ -67,7 +66,7 @@ class Gui(object):
 
     def get_trackbar_values(self):
         """Refreshes variables with Trackbars positions.
-        Returns: 
+        Updates: 
             self.pos -- positions, states and coeficients dict
         """
         self.pos['scr_width'] = max(cv2.getTrackbarPos('fit width', self.C_HDR), \
@@ -80,6 +79,7 @@ class Gui(object):
                                                 self.width / 2
         self.pos['i_y'] = cv2.getTrackbarPos('image y', self.C_HDR) - \
                                                 self.height / 2
+        self.pos['angle'] = -cv2.getTrackbarPos('angle', self.C_HDR)
         self.pos['projections'] = cv2.getTrackbarPos('projections', self.C_HDR)
         self.pos['loop_video'] = cv2.getTrackbarPos('loop video', self.C_HDR)
         self.pos['tracking_on'] = cv2.getTrackbarPos('Track Faces', self.C_HDR)
@@ -107,15 +107,15 @@ class Gui(object):
                 cv2.destroyWindow('result')
                 self._debugger_off = True
 
-    def debugger_show(self, frame, projection):
+    def debugger_show(self, frame, frame_mod):
         """Adds two additional windows for debugging and adjustments.
         Args:
             frame -- original frame from video input, with face highlited
-            projection -- processed frame
+            frame_mod -- processed frame
         """
         cv2.imshow('original', frame)
         cv2.moveWindow('original', 0, 0)
-        cv2.imshow('result', projection)
+        cv2.imshow('result', frame_mod)
         cv2.moveWindow('result', 0, self.height)
 
     def exit(self):

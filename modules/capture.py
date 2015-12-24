@@ -1,6 +1,7 @@
 from . import cv2
 from . import np
 
+
 class Capture(object):
     """Camera or video file input routines.
     Args:
@@ -41,7 +42,6 @@ class Capture(object):
 
     @loop_video.setter
     def loop_video(self, status):
-        print(status)
         if isinstance(status, bool):
             self._loop_video = status
         elif isinstance(status, int):
@@ -57,7 +57,7 @@ class Capture(object):
     def width(self):
         return int(self._cap.get(3))
 
-    def close(self):
+    def release(self):
         if self._cap.isOpened():
             self._cap.release()
     
