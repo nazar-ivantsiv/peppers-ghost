@@ -43,8 +43,10 @@ from modules.im_trans import brightness_contrast
 from modules.im_trans import create_triangle_mask
 from modules.im_trans import draw_rect
 from modules.im_trans import draw_ellipse
+from modules.im_trans import fit_into
 from modules.im_trans import img_to_gray
 from modules.im_trans import rotate
+from modules.im_trans import scale
 from modules.im_trans import translate
 
 
@@ -119,11 +121,14 @@ class Ghost(object):
         Returns:
             result -- modified frame according to users adjustments
         """
-        # Translate image to (i_x, i_y)
+        # Translate frame to (i_x, i_y)
         if (self.pos['i_x'] != 0)or(self.pos['i_y'] != 0):
             frame = translate(frame, int(self.pos['i_x']), \
                                     int(self.pos['i_y']))
-# Put SCALING HERE (use frame var)
+        # Scale frame
+        if self.pos['scale'] != 1:
+            frame_scaled = scale(frame, self.pos['scale'])
+            frame = fit_into(frame_scaled, self.height, self.width)
         result = frame.copy()
         result = brightness_contrast(result, self.pos['contrast'], \
                                    self.pos['brightness'])
@@ -145,7 +150,7 @@ class Ghost(object):
                                         bottom=self.pos['m_btm'])
         return result
 
-    def _create_screen(self, frame, projections=6, blend=1, angle=-90):
+    def _create_screen(self, frame, projections=4, blend=1, angle=-90):
         """Create projections rotated by 'angle' deg. CCW
         Args:
             frame -- processed frame

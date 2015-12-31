@@ -16,6 +16,7 @@ class Gui(object):
         self.pos['m_blend'] -- blends 4 mask projections (def. MASK_BLEND)
         self.pos['i_x'] -- frame x pos
         self.pos['i_y'] -- frame y pos
+        self.pos['angle'
         self.pos['projections'] -- projections qty (def. 4)
         self.pos['loop_video'] -- on/off
         self.pos['tracking_on'] -- FaceTracking on/off
@@ -56,6 +57,7 @@ class Gui(object):
                              nothing)
         cv2.createTrackbar('image y', self.C_HDR, int(self.height / 2), \
                            self.height, nothing)
+        cv2.createTrackbar('scale', self.C_HDR, 100, 300, nothing)
         cv2.createTrackbar('angle', self.C_HDR, 90, 90, nothing)
         cv2.createTrackbar('projections', self.C_HDR, 4, 10, nothing)
         cv2.createTrackbar('loop video', self.C_HDR, 1, 1, nothing)
@@ -79,6 +81,7 @@ class Gui(object):
                                                 self.width / 2
         self.pos['i_y'] = cv2.getTrackbarPos('image y', self.C_HDR) - \
                                                 self.height / 2
+        self.pos['scale'] = cv2.getTrackbarPos('scale', self.C_HDR) / 100
         self.pos['angle'] = -cv2.getTrackbarPos('angle', self.C_HDR)
         self.pos['projections'] = cv2.getTrackbarPos('projections', self.C_HDR)
         self.pos['loop_video'] = cv2.getTrackbarPos('loop video', self.C_HDR)

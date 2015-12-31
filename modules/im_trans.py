@@ -74,6 +74,40 @@ def draw_ellipse(img, faces):
                                 0, 0, 360, (255, 255, 255), -1)
     return result
 
+def fit_into(img, dest_height, dest_width):
+    """Fits img into rect (height x width) or crops it.
+    Args:
+        img -- image
+        h -- destination height
+        w -- destination width
+    Returns:
+        result -- img cropped with (dest_height X dest_width) if img is BIGGER
+        than destination dimentions. img with border added if it is SMALLER, to
+        fit into destination dimentions.
+    """
+    result = img.copy()
+    im_height, im_width = img.shape[:2]
+    # Get x, y coordinates for cropped subframe
+    y = (im_height - dest_height) // 2
+    x = (im_width - dest_width) // 2
+    # Border color
+    BLACK = [0, 0, 0]
+    if y < 0:
+        # Add border to TOP and BOTTOM of img
+        # Will compensate remaining (y) lack of height
+        result = cv2.copyMakeBorder(result, abs(y), abs(y), 0, 0, \
+                                    cv2.BORDER_CONSTANT, \
+                                    value=BLACK)
+        y = 0
+    if x < 0:
+        # Add border to LEFT and RIGHT of img.
+        # Will compensate remaining (x) lack of width
+        result = cv2.copyMakeBorder(result, 0, 0, abs(x), abs(x), \
+                                    cv2.BORDER_CONSTANT, \
+                                    value=BLACK)
+        x = 0
+    return result[y:y + dest_height, x:x + dest_width]
+
 def img_to_gray(img):
     """Converts img (frame) to Grayscale, adjust contrast."""
     img = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
@@ -87,8 +121,7 @@ def scale(img, ratio):
     Returns:
         result -- scaled image
     """
-    result = cv2.resize(img, None, fx=ratio, fy=ratio)
-    return result
+    return cv2.resize(img, None, fx=ratio, fy=ratio)
 
 def show(img):
     """Shows img in the 'show' window"""
