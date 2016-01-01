@@ -33,11 +33,12 @@ from os import getcwd
 import numpy as np
 import cv2
 
+from pydispatch import dispatcher
+
 from modules.gui import Gui
 from modules.capture import Capture
 from modules.output import Output
 from modules.segmentation import FaceExtraction
-
 from modules.im_trans import apply_mask
 from modules.im_trans import brightness_contrast
 from modules.im_trans import create_triangle_mask
@@ -68,16 +69,19 @@ class Ghost(object):
 
         self.gui = Gui(self.height, self.width) # GUI instance
         self.pos = self.gui.pos                 # Dict with trackbars values
+        self.refresh_values()
+        # Init dispatcher for Gui trackbsbars ('pos' dict values updated)
+        SIGNAL = 'pos-updated'
+        dispatcher.connect(self.refresh_values, signal=SIGNAL, \
+                           sender=dispatcher.Any)
 
     def run(self):
         """Video processing."""
         while self.cap.is_opened():
             frame = self.cap.next_frame()
             # Create SCREEN with all settings/segmentations applied to frame
-            self.refresh_values()
-
-            frame_mod = self.apply_settings(frame)
-
+            #self.refresh_values()
+            frame_mod = self._apply_settings(frame)
             screen = self._create_screen(frame=frame_mod, \
                                          projections=self.pos['projections'], \
                                          blend=self.pos['m_blend'], \
@@ -109,12 +113,13 @@ class Ghost(object):
         self.gui.exit()
 
     def refresh_values(self):
-        self.gui.get_trackbar_values()
+        """Called via dispatcher when 'pos' dict values are updated"""
         self.scr_width = self.pos['scr_width']
         self.scr_centre_x = self.scr_width // 2
         self.cap.loop_video = self.pos['loop_video']
 
-    def apply_settings(self, frame):
+
+    def _apply_settings(self, frame):
         """Apply custom settings received from GUI (in self.pos).
         Args:
             frame -- original frame
@@ -129,6 +134,7 @@ class Ghost(object):
         if self.pos['scale'] != 1:
             frame_scaled = scale(frame, self.pos['scale'])
             frame = fit_into(frame_scaled, self.height, self.width)
+        # Adjust brightness/contrast
         result = frame.copy()
         result = brightness_contrast(result, self.pos['contrast'], \
                                    self.pos['brightness'])
@@ -162,7 +168,7 @@ class Ghost(object):
         # Create blank SCREEN
         screen = np.zeros((self.scr_height, self.scr_width, 3), np.uint8)
         p_height, p_width = frame.shape[:2]
-        x = self.scr_centre_x - p_width / 2
+        x = self.scr_centre_x - p_width // 2
         y = self.scr_centre_y - p_height * blend
         # Create projection with triangle mask
         projection = apply_mask(frame, self.mask)
