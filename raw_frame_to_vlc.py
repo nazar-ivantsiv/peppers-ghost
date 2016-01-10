@@ -9,7 +9,9 @@ import subprocess as sp
 from modules.capture import Capture
 
 """Use this way, from shell:
-python raw_frame_to_vlc.py | cvlc - --sout '#standard{access=http,mux=ts,url=127.0.0.1:8080}'
+python raw_frame_to_vlc.py | cvlc -vvv --demux=rawvideo --rawvid-fps=24 
+--rawvid-width=640 --rawvid-height=360 --rawvid-chroma=RV24 - 
+--sout "#transcode{vcodec=h264,vb=800,width=640, height=360}:standard{access=file,mux=ts,dst=test.mpg}" vlc://quit
 """
 
 cap = Capture('test2.mp4')
