@@ -7,7 +7,7 @@ Author:
     Nazar Ivantsiv
 Mentors:
     Nazar Grabovskyy
-    Igor Lushchik
+    Igor Lushchyk
 
 Creates pyramid like projection of input video (camera or file), ready to
 use with pseudo holographic pyramid.
@@ -37,7 +37,7 @@ from pydispatch import dispatcher
 
 from modules.gui import Gui
 from modules.capture import Capture
-from modules.output import Output
+from modules.output_dib import Output
 from modules.segmentation import FaceExtraction
 from modules.im_trans import apply_mask
 from modules.im_trans import brightness_contrast
@@ -58,6 +58,7 @@ class Ghost(object):
         self.cap = Capture(source)              # Input instance:
                                                 # def. source == 0 (webcamera)
         self.out = Output()
+        #self.out.set_output()
         self.height = self.cap.height           # Frame height
         self.width = self.cap.width             # Frame width
         self.scr_height = self.height * 2       # Scr height
@@ -66,11 +67,9 @@ class Ghost(object):
         self.scr_centre_y = self.height         # Scr centre x
 
         self.face_ex = FaceExtraction(self.height, self.width)
-
         self.gui = Gui(self.height, self.width) # GUI instance
         self.pos = self.gui.pos                 # Dict with trackbars values
-        self.refresh_values()
-        # Init dispatcher for Gui trackbsbars ('pos' dict values updated)
+        # Init dispatcher for Gui trackbsbars (some of 'pos' dict values updated)
         SIGNAL = 'pos-updated'
         dispatcher.connect(self.refresh_values, signal=SIGNAL, \
                            sender=dispatcher.Any)
