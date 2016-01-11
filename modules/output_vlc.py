@@ -19,7 +19,9 @@ DST = '192.168.0.2:8080' #'127.0.0.1:8080'
 
 class Output(object):
     """ """
-    def __init__(self):
+    def __init__(self, dst='127.0.0.1:8080'):
+        if dst != '127.0.0.1:8080':
+            DST = dst
         self._pipe = None
         self._is_opened = False
 

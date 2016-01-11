@@ -54,11 +54,12 @@ from modules.im_trans import translate
 class Ghost(object):
     """Pepper's Ghost video processor."""
 
+    FPS_CORRECTION = 5  # Decrease streaming fps (compensates fps drop when streaming started).
+
     def __init__(self, source=0):
         self.cap = Capture(source)              # Input instance:
                                                 # def. source == 0 (webcamera)                                                
         self.out = Output()
-        #self.out.set_output()
         self.height = self.cap.height           # Frame height
         self.width = self.cap.width             # Frame width
         self.scr_height = self.height * 2       # Scr height
@@ -82,7 +83,7 @@ class Ghost(object):
                                          blend=self.pos['m_blend'], \
                                          angle=self.pos['angle'])
             if self.out.is_opened:               # Save video to output
-                self.out.write(cv2.pyrDown(screen))#self.out.write(scale(screen, 0.7))
+                self.out.write(screen)#self.out.write(scale(screen, 0.7))
 
             # Operation routines
             self.gui.preview(screen)       # Preview into SCREEN window
@@ -95,11 +96,11 @@ class Ghost(object):
                 self.gui.toggle_fullscreen()
             elif key_pressed == ord('o'):       # Set output file
                 if self.cap.source != -1:       # Is NOT a video file
-                    fps = int(round(1 / (time() - start))) - 2  # 2 frames less than actual fps
+                    fps = int(round(1 / (time() - start))) - self.FPS_CORRECTION
                 else:
-                    fps = self.cap.fps          # Use video file fps
-                self.out.set_output(fps, self.scr_height // 2, \
-                                    self.scr_width // 2)
+                    fps = self.cap.fps - self.FPS_CORRECTION  # Use video file fps
+                self.out.set_output(fps, self.scr_height, \
+                                    self.scr_width)
             elif key_pressed == ord('r'):       # Release output
                 self.out.release()
             if self.gui.DEBUGGER_MODE:          # Shows debugger win if ON
