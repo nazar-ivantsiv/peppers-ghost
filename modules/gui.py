@@ -39,40 +39,43 @@ class Gui(object):
         self.fullscreen = not cv2.WINDOW_FULLSCREEN # Flag: fullscreen (off)
         self._debugger_off = not self.DEBUGGER_MODE # Flag: debugger status
 
-        def nothing(x):
-            pass
+        def on_change(_):
+            """Updates values in self.pos if any change."""
+            self._get_trackbar_values()
         
         cv2.namedWindow(self.C_HDR, cv2.WINDOW_NORMAL)
         cv2.namedWindow(self.S_HDR, cv2.WINDOW_NORMAL)
-        cv2.createTrackbar('fit width', self.C_HDR, int(self.width * 2),\
-                           self.width * 4, nothing)
+#        cv2.createTrackbar('fit width', self.C_HDR, int(self.width * 2),\
+#                           self.width * 4, on_change)
         cv2.createTrackbar('mask centre', self.C_HDR, int(self.MASK_CENTRE * 100),\
-                           100, nothing)
+                           100, on_change)
         cv2.createTrackbar('mask bottom', self.C_HDR, int(self.MASK_BOTTOM * 100),\
-                           100, nothing)
-        cv2.createTrackbar('mask side', self.C_HDR, 150, 400, nothing)
+                           100, on_change)
+        cv2.createTrackbar('mask side', self.C_HDR, 150, 400, on_change)
         cv2.createTrackbar('mask blend', self.C_HDR, int(self.MASK_BLEND * 1000),\
-                           1000, nothing)
-        cv2.createTrackbar('image x', self.C_HDR, int(self.width / 2), self.width,\
-                             nothing)
+                           1000, on_change)
+        cv2.createTrackbar('image x', self.C_HDR, int(self.width / 2), \
+                           self.width, on_change)
         cv2.createTrackbar('image y', self.C_HDR, int(self.height / 2), \
-                           self.height, nothing)
-        cv2.createTrackbar('scale', self.C_HDR, 100, 300, nothing)
-        cv2.createTrackbar('angle', self.C_HDR, 90, 90, nothing)
-        cv2.createTrackbar('projections', self.C_HDR, 4, 10, nothing)
-        cv2.createTrackbar('loop video', self.C_HDR, 1, 1, nothing)
-        cv2.createTrackbar('Track Faces', self.C_HDR, 0, 1, nothing)
-        cv2.createTrackbar('  GrabCut iters', self.C_HDR, 0, 5, nothing)
-        cv2.createTrackbar('contrast', self.C_HDR, 10, 30, nothing)
-        cv2.createTrackbar('brightness', self.C_HDR, 0, 100, nothing)
+                           self.height, on_change)
+        cv2.createTrackbar('scale', self.C_HDR, 100, 300, on_change)
+        cv2.createTrackbar('angle', self.C_HDR, 90, 90, on_change)
+        cv2.createTrackbar('projections', self.C_HDR, 4, 10, on_change)
+        cv2.createTrackbar('loop video', self.C_HDR, 1, 1, on_change)
+        cv2.createTrackbar('Track Faces', self.C_HDR, 0, 1, on_change)
+        cv2.createTrackbar('  GrabCut iters', self.C_HDR, 0, 5, on_change)
+        cv2.createTrackbar('contrast', self.C_HDR, 10, 30, on_change)
+        cv2.createTrackbar('brightness', self.C_HDR, 0, 100, on_change)
+        self._get_trackbar_values()
 
-    def get_trackbar_values(self):
+    def _get_trackbar_values(self):
         """Refreshes variables with Trackbars positions.
-        Updates: 
+        on_changes: 
             self.pos -- positions, states and coeficients dict
         """
-        self.pos['scr_width'] = max(cv2.getTrackbarPos('fit width', self.C_HDR), \
-                                    self.height * 2)
+#        self.pos['scr_width'] = \
+#            max((cv2.getTrackbarPos('fit width', self.C_HDR) // 2) * 2 , \
+#                self.height * 2)
         self.pos['m_cntr'] = cv2.getTrackbarPos('mask centre', self.C_HDR) / 100
         self.pos['m_btm'] = cv2.getTrackbarPos('mask bottom', self.C_HDR)  / 100
         self.pos['m_side'] = cv2.getTrackbarPos('mask side', self.C_HDR) / 100
@@ -119,7 +122,7 @@ class Gui(object):
         cv2.imshow('original', frame)
         cv2.moveWindow('original', 0, 0)
         cv2.imshow('result', frame_mod)
-        cv2.moveWindow('result', 0, self.height)
+        cv2.moveWindow('result', 0, self.height + 50)
 
     def exit(self):
         cv2.destroyAllWindows()
