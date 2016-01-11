@@ -11,7 +11,8 @@ Mentors:
 
 Creates pyramid like projection of input video (camera or file), ready to
 use with pseudo holographic pyramid.
-Source - video camera or video file
+Source -- video camera or video file
+Output -- monitor, VLC stream or video file
 
 USAGE:
     'SETTINGS' window gives you ability to change different Ghost instance
@@ -22,7 +23,7 @@ into Fullscreen mode by dragging it into desired monitor and pressing 'f' key.
 Key 'q' - To quit
 Key 'd' - Debugger windows (on/off)
 Key 'f' - Fullscreen mode (on/off)
-Key 'o' - Open video output (write to file 'out.avi')
+Key 'o' - Open video output (VLC stream or video file file)
 Key 'r' - Release video output
 ==============================================================================
 """
