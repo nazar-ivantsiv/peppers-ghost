@@ -1,7 +1,6 @@
 from __future__ import division
 from . import cv2
 from . import np
-from pydispatch import dispatcher
 
 
 class Gui(object):
@@ -39,19 +38,15 @@ class Gui(object):
         self.pos = {}                               # Trackbar positions
         self.fullscreen = not cv2.WINDOW_FULLSCREEN # Flag: fullscreen (off)
         self._debugger_off = not self.DEBUGGER_MODE # Flag: debugger status
-        SIGNAL = 'pos-updated'
 
         def on_change(_):
-            """Callback function for Trackbar.
-            Is called when any of trackbars is moved, sends SIGNAL to Ghost 
-            cls to launch 'refresh_values' method"""
+            """Updates values in self.pos if any change."""
             self._get_trackbar_values()
-            dispatcher.send(signal=SIGNAL, sender=None)
         
         cv2.namedWindow(self.C_HDR, cv2.WINDOW_NORMAL)
         cv2.namedWindow(self.S_HDR, cv2.WINDOW_NORMAL)
-        cv2.createTrackbar('fit width', self.C_HDR, int(self.width * 2),\
-                           self.width * 4, on_change)
+#        cv2.createTrackbar('fit width', self.C_HDR, int(self.width * 2),\
+#                           self.width * 4, on_change)
         cv2.createTrackbar('mask centre', self.C_HDR, int(self.MASK_CENTRE * 100),\
                            100, on_change)
         cv2.createTrackbar('mask bottom', self.C_HDR, int(self.MASK_BOTTOM * 100),\
@@ -78,9 +73,9 @@ class Gui(object):
         on_changes: 
             self.pos -- positions, states and coeficients dict
         """
-        self.pos['scr_width'] = \
-            max((cv2.getTrackbarPos('fit width', self.C_HDR) // 2) * 2 , \
-                self.height * 2)
+#        self.pos['scr_width'] = \
+#            max((cv2.getTrackbarPos('fit width', self.C_HDR) // 2) * 2 , \
+#                self.height * 2)
         self.pos['m_cntr'] = cv2.getTrackbarPos('mask centre', self.C_HDR) / 100
         self.pos['m_btm'] = cv2.getTrackbarPos('mask bottom', self.C_HDR)  / 100
         self.pos['m_side'] = cv2.getTrackbarPos('mask side', self.C_HDR) / 100
@@ -127,7 +122,7 @@ class Gui(object):
         cv2.imshow('original', frame)
         cv2.moveWindow('original', 0, 0)
         cv2.imshow('result', frame_mod)
-        cv2.moveWindow('result', 0, self.height)
+        cv2.moveWindow('result', 0, self.height + 50)
 
     def exit(self):
         cv2.destroyAllWindows()

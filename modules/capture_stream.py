@@ -57,10 +57,6 @@ class Capture(object):
     def width(self):
         return int(self._cap.get(3))
 
-    @property
-    def fps(self):
-        return self._cap.get(cv2.CAP_PROP_FPS)
-
     def release(self):
         if self._cap.isOpened():
             self._cap.release()

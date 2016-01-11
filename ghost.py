@@ -29,15 +29,14 @@ Key 'r' - Release video output
 
 from __future__ import division
 from os import getcwd
+from time import time
 
 import numpy as np
 import cv2
 
-from pydispatch import dispatcher
-
 from modules.gui import Gui
 from modules.capture import Capture
-from modules.output_dib import Output
+from modules.output_vlc import Output
 from modules.segmentation import FaceExtraction
 from modules.im_trans import apply_mask
 from modules.im_trans import brightness_contrast
@@ -56,7 +55,7 @@ class Ghost(object):
 
     def __init__(self, source=0):
         self.cap = Capture(source)              # Input instance:
-                                                # def. source == 0 (webcamera)
+                                                # def. source == 0 (webcamera)                                                
         self.out = Output()
         #self.out.set_output()
         self.height = self.cap.height           # Frame height
@@ -69,24 +68,21 @@ class Ghost(object):
         self.face_ex = FaceExtraction(self.height, self.width)
         self.gui = Gui(self.height, self.width) # GUI instance
         self.pos = self.gui.pos                 # Dict with trackbars values
-        # Init dispatcher for Gui trackbsbars (some of 'pos' dict values updated)
-        SIGNAL = 'pos-updated'
-        dispatcher.connect(self.refresh_values, signal=SIGNAL, \
-                           sender=dispatcher.Any)
 
     def run(self):
         """Video processing."""
         while self.cap.is_opened():
+            start = time()
             frame = self.cap.next_frame()
             # Create SCREEN with all settings/segmentations applied to frame
-            #self.refresh_values()
             frame_mod = self._apply_settings(frame)
             screen = self._create_screen(frame=frame_mod, \
                                          projections=self.pos['projections'], \
                                          blend=self.pos['m_blend'], \
                                          angle=self.pos['angle'])
             if self.out.is_opened:               # Save video to output
-                self.out.write(screen)
+                self.out.write(cv2.pyrDown(screen))#self.out.write(scale(screen, 0.7))
+
             # Operation routines
             self.gui.preview(screen)       # Preview into SCREEN window
             key_pressed = 0xFF & cv2.waitKey(1)
@@ -97,11 +93,17 @@ class Ghost(object):
             elif key_pressed == ord('f'):       # Fullscreen on/off
                 self.gui.toggle_fullscreen()
             elif key_pressed == ord('o'):       # Set output file
-                self.out.set_output('out.avi', self.scr_height, self.scr_width)
+                if self.cap.source != -1:       # Is NOT a video file
+                    fps = int(round(1 / (time() - start))) - 2  # 2 frames less than actual fps
+                else:
+                    fps = self.cap.fps          # Use video file fps
+                self.out.set_output(fps, self.scr_height // 2, \
+                                    self.scr_width // 2)
             elif key_pressed == ord('r'):       # Release output
                 self.out.release()
             if self.gui.DEBUGGER_MODE:          # Shows debugger win if ON
-                frame = draw_rect(frame, self.face_ex.faces)
+                frame = self._add_fps( frame, start )
+                frame = draw_rect( frame, self.face_ex.faces )
                 self.gui.debugger_show(frame, frame_mod)
         self.stop()
 
@@ -111,12 +113,12 @@ class Ghost(object):
         self.out.release()
         self.gui.exit()
 
-    def refresh_values(self):
-        """Called via dispatcher when 'pos' dict values are updated"""
-        self.scr_width = self.pos['scr_width']
-        self.scr_centre_x = self.scr_width // 2
-        self.cap.loop_video = self.pos['loop_video']
-
+    def _add_fps(self, frame, start):
+        fps = 1 / (time() - start)
+        cv2.putText(frame, 'fps: {0:.1f}'.format(fps), \
+                    (10, self.cap.height - 50), cv2.FONT_HERSHEY_PLAIN, 3, \
+                    (255,255,255), 2, cv2.LINE_AA)
+        return frame
 
     def _apply_settings(self, frame):
         """Apply custom settings received from GUI (in self.pos).
@@ -153,6 +155,9 @@ class Ghost(object):
                                         side=self.pos['m_side'], \
                                         centre=self.pos['m_cntr'], \
                                         bottom=self.pos['m_btm'])
+#        self.scr_width = self.pos['scr_width']
+#        self.scr_centre_x = self.scr_width // 2
+        self.cap.loop_video = self.pos['loop_video']
         return result
 
     def _create_screen(self, frame, projections=4, blend=1, angle=-90):
@@ -186,7 +191,7 @@ class Ghost(object):
         return screen
 
 if __name__ == '__main__':
-    #ghost = Ghost('/home/chip/pythoncourse/hologram2/test.mp4')
+    #ghost = Ghost('/home/chip/pythoncourse/hologram2/test2.mp4')
     ghost = Ghost()
 
     #path = getcwd()

@@ -1,4 +1,5 @@
 from __future__ import division
+import sys
 import time
 
 import numpy as numpy
@@ -29,39 +30,24 @@ command = [ FFMPEG_BIN,
         '-f', 'mpeg',
         '-'# output goes to stdout (use 'vlc -' to catch)
         ]
-
-sout=#transcode{vcodec=h264,vb=800,scale=Auto,acodec=none}:http{mux=ts,dst=:8080/}
-
 """
 
+
 VLC_BIN = 'cvlc'
-VIDEO_CODEC = 'mp4v'
-VIDEO_BITRATE = 800
-HTTP_IP = '192.168.0.2' #'127.0.0.1'
-HTTP_PORT = 8080
 command_vlc = [VLC_BIN,
-        '-',
-        '-v',
+        '-vvv',
         '--demux=rawvideo',
-        '--rawvid-fps={}'.format(int(round(cap.fps))),
+        '--rawvid-fps=24',  # Use cap value
         '--rawvid-width={}'.format(cap.width),
         '--rawvid-height={}'.format(cap.height),
         '--rawvid-chroma=RV24',
+        '-',
         '--sout', 
-#        '#std{access=http,mux=avi,dst=192.168.0.2,port=8080}',
-        '#transcode{vcodec=%s,vb=%s,width=%s,height=%s,acodec=none}:'
-        'std{access=http,mux=ts,dst=%s,port=%s}' % \
-        (VIDEO_CODEC, VIDEO_BITRATE, cap.width, cap.height, HTTP_IP, HTTP_PORT),
-
-        'vlc://quit'    # close vlc when finished
+        '\'#transcode{vcodec=mp4v,vb=800,width=640, height=360}:std{access=http,mux=ts,dst=127.0.0.1,port=8080}\'',
+        'vlc://quit'
         ]
-
-#command_vlc = command_vlc[:8]  # show raw video, rtreived in vlc
-
-#print(command_vlc[9:])
-
 #sp.call(['mkfifo', 'video_pipe'])
-pipe = sp.Popen( command_vlc , stdin=sp.PIPE, stderr=sp.STDOUT)
+#pipe = sp.Popen( command_vlc , stdin=sp.PIPE, stderr=sp.PIPE)
 
 start = time.time()
 
@@ -71,11 +57,17 @@ def add_fps(frame, start):
                 cv2.FONT_HERSHEY_PLAIN, 2, (255,255,255), 2, cv2.LINE_AA)
     return frame
 
+
 while c < cap.video_len:
     frame = cap.next_frame()
     add_fps(frame, start)
+    #print('frame #:{}'.format(c))
     rgb = cv2.cvtColor( frame, cv2.COLOR_BGR2RGB )
-    pipe.stdin.write( rgb.tostring() )
+    sys.stdout.write( rgb.tostring() )
+    #pipe.stdin.write( rgb.tostring() )
+
+    # - DONE. pass array.tostring() to ffmpeg
+    # - pass array.tostring() to vlc -I rc -vvv - --sout '#standard{access=http,mux=ts,url=127.0.0.1:8080}'
 
     # PREVIEW
     cv2.imshow('show', frame)
@@ -84,5 +76,6 @@ while c < cap.video_len:
         break
     c += 1
 
+#pipe.stdin.write('^C')
 cap.release()
-pipe.terminate()
+#pipe.terminate()
