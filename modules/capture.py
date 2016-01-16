@@ -8,6 +8,7 @@ class Capture(object):
         source -- video source (0, 1, 2.. - camera or video file path)
     """
     def __init__(self, source=0):
+
         self._cap = cv2.VideoCapture(source)    # Input source instance
         if not self._cap.isOpened():
             self._cap.open()

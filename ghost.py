@@ -30,13 +30,13 @@ Key 'r' - Release video output
 
 from __future__ import division
 from os import getcwd
-from time import time
+from time import time, sleep
 
 import numpy as np
 import cv2
 
-from modules.gui import Gui
 from modules.capture import Capture
+from modules.gui import Gui
 from modules.output_vlc import Output
 from modules.segmentation import FaceExtraction
 from modules.im_trans import apply_mask
@@ -54,8 +54,6 @@ from modules.im_trans import translate
 class Ghost(object):
     """Pepper's Ghost video processor."""
 
-    FPS_CORRECTION = 5  # Decrease streaming fps (compensates fps drop when streaming started).
-
     def __init__(self, source=0):
         self.cap = Capture(source)              # Input instance:
                                                 # def. source == 0 (webcamera)                                                
@@ -68,8 +66,25 @@ class Ghost(object):
         self.scr_centre_y = self.height         # Scr centre x
 
         self.face_ex = FaceExtraction(self.height, self.width)
-        self.gui = Gui(self.height, self.width) # GUI instance
-        self.pos = self.gui.pos                 # Dict with trackbars values
+        self.pos = {}                           # Dict with trackbars values
+#        self.pos['scr_width'] = self.width * 2  # A crutch to expand black area 
+                                                # around the SCREEN.
+                                                # (Not needed if we use VLC client.)
+        self.pos['m_cntr'] = 0                  # Centre of the mask in SCREEN
+        self.pos['m_btm'] = 1                   # Mask bottom corner position
+        self.pos['m_side'] = 1.5                # Mask side corners pos
+        self.pos['m_blend'] = 1                 # Centre of the mask in FRAME
+        self.pos['i_x'] = int(self.width / 2)   # frame x pos
+        self.pos['i_y'] = int(self.height / 2)  # frame y pos
+        self.pos['scale'] = 1                   # frame scale factor
+        self.pos['angle'] = 90                  # angle relation between projections
+        self.pos['projections'] = 4             # projections qty (def. 4)
+        self.pos['loop_video'] = 1              # on/off
+        self.pos['tracking_on'] = 0             # FaceTracking on/off
+        self.pos['gc_iters'] = 0                # GrabCut iterations
+        self.pos['contrast'] = 1                # contrast adj.
+        self.pos['brightness'] = 0              # brightness adj.
+        self.gui = Gui(self.height, self.width, self.pos) # GUI instance
 
     def run(self):
         """Video processing."""
@@ -88,21 +103,8 @@ class Ghost(object):
             # Operation routines
             self.gui.preview(screen)       # Preview into SCREEN window
             key_pressed = 0xFF & cv2.waitKey(1)
-            if key_pressed == ord('q'):         # Wait for 'q' to exit
+            if not self._process_key(key_pressed):
                 break
-            elif key_pressed == ord('d'):       # Debugger windows(on/off)
-                self.gui.toggle_debugger()
-            elif key_pressed == ord('f'):       # Fullscreen on/off
-                self.gui.toggle_fullscreen()
-            elif key_pressed == ord('o'):       # Set output file
-                if self.cap.source != -1:       # Is NOT a video file
-                    fps = int(round(1 / (time() - start))) - self.FPS_CORRECTION
-                else:
-                    fps = self.cap.fps - self.FPS_CORRECTION  # Use video file fps
-                self.out.set_output(fps, self.scr_height, \
-                                    self.scr_width)
-            elif key_pressed == ord('r'):       # Release output
-                self.out.release()
             if self.gui.DEBUGGER_MODE:          # Shows debugger win if ON
                 frame = self._add_fps( frame, start )
                 frame = draw_rect( frame, self.face_ex.faces )
@@ -188,13 +190,38 @@ class Ghost(object):
             dst = cv2.add(roi_bg, projection)
             # Put ROI on SCREEN, in place
             screen[y : y + p_height, x : x + p_width] = dst
-        #    self._add_projection(projection, blend=self.pos['m_blend'])
             screen = rotate(screen, angle, self.scr_centre_x, self.scr_centre_y)
         return screen
 
+    def _process_key(self, key_pressed):
+        """Method called from while loop in run(). Porcesses the key pressed.
+        returns 0 if EXIT button (def. 'q') is pressed. Else returns 1.
+        Args:
+            key_pressed -- ord value of key pressed
+        Reurns:
+            1 -- take an action and go ahead i the loop
+            0 -- take an action and BREAK the loop
+        """
+        if key_pressed == ord('q'):         # Wait for 'q' to exit
+            return 0
+        elif key_pressed == ord('d'):       # Debugger windows(on/off)
+            self.gui.toggle_debugger()
+        elif key_pressed == ord('f'):       # Fullscreen on/off
+            self.gui.toggle_fullscreen()
+        elif key_pressed == ord('o'):       # Set output file
+            if self.cap.source != -1:       # Is NOT a video file
+                fps = int(round(1 / (time() - start)))
+            else:
+                fps = self.cap.fps          # Use video file fps
+            self.out.set_output(fps, self.scr_height, \
+                                self.scr_width)
+        elif key_pressed == ord('r'):       # Release output
+            self.out.release()
+        return 1
+
 if __name__ == '__main__':
     #ghost = Ghost('/home/chip/pythoncourse/hologram2/test2.mp4')
-    ghost = Ghost()
+    ghost = Ghost(0)
 
     #path = getcwd()
     #ghost.set_output(path+'/out.avi')

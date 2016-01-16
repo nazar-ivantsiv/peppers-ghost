@@ -5,6 +5,9 @@ from . import np
 from . import cv2
 import subprocess as sp
 
+
+FPS_CORRECTION = 8  # Decrease streaming fps (compensates fps drop when streaming started).
+
 VLC_BIN = 'cvlc'
 FILE_CACHING = 300      # 300
 NETWORK_CACHING = 1000   # 1000
@@ -13,15 +16,15 @@ VIDEO_CODEC = 'mp4v'    # mp4v
 VIDEO_BITRATE = 1600     # 800
 
 MUX = 'ts'
-DST = '192.168.0.2:8080' #'127.0.0.1:8080'
+DST = ':8080/'
 
 
 
 class Output(object):
     """ """
     def __init__(self, dst='127.0.0.1:8080'):
-        if dst != '127.0.0.1:8080':
-            DST = dst
+#        if dst != '127.0.0.1:8080':
+#            DST = dst
         self._pipe = None
         self._is_opened = False
 
@@ -35,29 +38,31 @@ class Output(object):
             Heigh and width are flipped in this case (width, height).
             Not common to OpenCV.
         """
-        print('\nStarting stream to {}:'.format(DST))
-        print('FPS rate:   {}'.format(fps))
-        print('resolution: {} x {}'.format(scr_width, scr_height))
         command_vlc = [VLC_BIN,
 '-',
 '-v',
-'--file-caching={}'.format(FILE_CACHING),
-'--network-caching={}'.format(NETWORK_CACHING),
-'--clock-synchro=0',
+#'--file-caching={}'.format(FILE_CACHING),
+#'--network-caching={}'.format(NETWORK_CACHING),
 '--demux=rawvideo',
-'--rawvid-fps={}'.format(int(round(fps))),
+'--rawvid-fps={}'.format(int(round(fps - FPS_CORRECTION))),
 '--rawvid-width={}'.format(scr_width),
 '--rawvid-height={}'.format(scr_height),
 '--rawvid-chroma=RV24',
 '--sout', 
+
 '#transcode{vcodec=%s,vb=%s,width=%s,height=%s,acodec=none}:'
-'std{access=http,mux=%s,dst=%s}' % \
+'http{mux=%s,dst=%s}' % \
 (VIDEO_CODEC, VIDEO_BITRATE, scr_width, scr_height, MUX, DST),
+
+'--sout-keep',
 'vlc://quit'    # close vlc when finished
         ]
-
-        self._pipe = sp.Popen( command_vlc , stdin=sp.PIPE, stderr=sp.STDOUT)
-        self._is_opened = True
+        if self._is_opened == False:
+            print('\nStarting stream to {}:'.format(DST))
+            print('FPS rate:   {}'.format(fps - FPS_CORRECTION))
+            print('resolution: {} x {}'.format(scr_width, scr_height))
+            self._pipe = sp.Popen( command_vlc , stdin=sp.PIPE, stderr=sp.STDOUT)
+            self._is_opened = True
 
     @property
     def is_opened(self):

@@ -8,6 +8,7 @@ class Gui(object):
     Args:
         height -- output SCREEN original height
         width -- output SCREEN original width
+        pos -- reference to dict with default trackbar values (from ghost.py)
     Returns:
         self.pos['scr_width'] -- screen width
         self.pos['m_cntr'] -- mask vertical position on frame (d. MASK_CENTRE)
@@ -16,7 +17,8 @@ class Gui(object):
         self.pos['m_blend'] -- blends 4 mask projections (def. MASK_BLEND)
         self.pos['i_x'] -- frame x pos
         self.pos['i_y'] -- frame y pos
-        self.pos['angle'
+        self.pos['scale'] -- frame scale factor
+        self.pos['angle'] -- angle relation between projections
         self.pos['projections'] -- projections qty (def. 4)
         self.pos['loop_video'] -- on/off
         self.pos['tracking_on'] -- FaceTracking on/off
@@ -25,17 +27,13 @@ class Gui(object):
         self.pos['brightness'] -- brightness adj.
     """
     DEBUGGER_MODE = 0                           # Flag: debugger mode off
-    MASK_CENTRE = 0                             # Centre of the mask in SCREEN
-    MASK_BOTTOM = 1                             # Mask bottom corner position
-    MASK_SIDE = 1.5                             # Mask side corners pos
-    MASK_BLEND = 1                              # Centre of the mask in FRAME
     C_HDR = 'SETTINGS'                          # Controls window header
     S_HDR = 'SCREEN'                            # Screen window header
 
-    def __init__(self, height, width):
+    def __init__(self, height, width, pos):
         self.height = height
         self.width = width
-        self.pos = {}                               # Trackbar positions
+        self.pos = pos                          # Trackbar positons dict
         self.fullscreen = not cv2.WINDOW_FULLSCREEN # Flag: fullscreen (off)
         self._debugger_off = not self.DEBUGGER_MODE # Flag: debugger status
 
@@ -47,25 +45,25 @@ class Gui(object):
         cv2.namedWindow(self.S_HDR, cv2.WINDOW_NORMAL)
 #        cv2.createTrackbar('fit width', self.C_HDR, int(self.width * 2),\
 #                           self.width * 4, on_change)
-        cv2.createTrackbar('mask centre', self.C_HDR, int(self.MASK_CENTRE * 100),\
+        cv2.createTrackbar('mask centre', self.C_HDR, int(self.pos['m_cntr'] * 100),\
                            100, on_change)
-        cv2.createTrackbar('mask bottom', self.C_HDR, int(self.MASK_BOTTOM * 100),\
+        cv2.createTrackbar('mask bottom', self.C_HDR, int(self.pos['m_btm'] * 100),\
                            100, on_change)
-        cv2.createTrackbar('mask side', self.C_HDR, 150, 400, on_change)
-        cv2.createTrackbar('mask blend', self.C_HDR, int(self.MASK_BLEND * 1000),\
+        cv2.createTrackbar('mask side', self.C_HDR, int(self.pos['m_side'] * 100), 400, on_change)
+        cv2.createTrackbar('mask blend', self.C_HDR, int(self.pos['m_blend'] * 1000),\
                            1000, on_change)
         cv2.createTrackbar('image x', self.C_HDR, int(self.width / 2), \
                            self.width, on_change)
         cv2.createTrackbar('image y', self.C_HDR, int(self.height / 2), \
                            self.height, on_change)
-        cv2.createTrackbar('scale', self.C_HDR, 100, 300, on_change)
-        cv2.createTrackbar('angle', self.C_HDR, 90, 90, on_change)
-        cv2.createTrackbar('projections', self.C_HDR, 4, 10, on_change)
-        cv2.createTrackbar('loop video', self.C_HDR, 1, 1, on_change)
-        cv2.createTrackbar('Track Faces', self.C_HDR, 0, 1, on_change)
-        cv2.createTrackbar('  GrabCut iters', self.C_HDR, 0, 5, on_change)
-        cv2.createTrackbar('contrast', self.C_HDR, 10, 30, on_change)
-        cv2.createTrackbar('brightness', self.C_HDR, 0, 100, on_change)
+        cv2.createTrackbar('scale', self.C_HDR, int(self.pos['scale'] * 100), 300, on_change)
+        cv2.createTrackbar('angle', self.C_HDR, self.pos['angle'], 90, on_change)
+        cv2.createTrackbar('projections', self.C_HDR, self.pos['projections'], 10, on_change)
+        cv2.createTrackbar('loop video', self.C_HDR, self.pos['loop_video'], 1, on_change)
+        cv2.createTrackbar('Track Faces', self.C_HDR, self.pos['tracking_on'], 1, on_change)
+        cv2.createTrackbar('  GrabCut iters', self.C_HDR, self.pos['gc_iters'], 5, on_change)
+        cv2.createTrackbar('contrast', self.C_HDR, int(self.pos['contrast'] * 10), 30, on_change)
+        cv2.createTrackbar('brightness', self.C_HDR, self.pos['brightness'], 100, on_change)
         self._get_trackbar_values()
 
     def _get_trackbar_values(self):
