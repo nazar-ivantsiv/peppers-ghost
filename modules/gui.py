@@ -83,7 +83,7 @@ class Gui(object):
         self.pos['i_y'] = cv2.getTrackbarPos('image y', self.C_HDR) - \
                                                 self.height / 2
         self.pos['scale'] = cv2.getTrackbarPos('scale', self.C_HDR) / 100 or 0.01
-        self.pos['angle'] = -cv2.getTrackbarPos('angle', self.C_HDR)
+        self.pos['angle'] = cv2.getTrackbarPos('angle', self.C_HDR)
         self.pos['proj_num'] = cv2.getTrackbarPos('projections', self.C_HDR)
         self.pos['loop_video'] = cv2.getTrackbarPos('loop video', self.C_HDR)
         self.pos['tracking_on'] = cv2.getTrackbarPos('Track Faces', self.C_HDR)

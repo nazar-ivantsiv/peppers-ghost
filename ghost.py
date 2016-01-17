@@ -82,7 +82,7 @@ class Ghost(object):
         self.pos['i_y'] = int(self.height / 2)  # frame y pos
         self.pos['scale'] = 1                   # frame scale factor
         self.pos['angle'] = 90                  # angle relation between projections
-        self.pos['proj_num'] = 4                # projections qty (def. 4)
+        self.pos['proj_num'] = 2                # projections qty (def. 4)
         self.pos['loop_video'] = 1              # on/off
         self.pos['tracking_on'] = 0             # FaceTracking on/off
         self.pos['gc_iters'] = 0                # GrabCut iterations
@@ -123,7 +123,7 @@ class Ghost(object):
 
     def _add_fps(self, frame, start):
         fps = 1 / (time() - start)
-        cv2.putText(frame, 'fps: {0:.1f}'.format(fps), \
+        cv2.putText(frame, 'fps: {0:.0f}'.format(fps), \
                     (10, self.cap.height - 50), cv2.FONT_HERSHEY_PLAIN, 3, \
                     (255,255,255), 2, cv2.LINE_AA)
         return frame
@@ -169,7 +169,7 @@ class Ghost(object):
         self.cap.loop_video = self.pos['loop_video']
         return result
 
-    def _create_output_img(self, frame, proj_num=4, y_offset_ratio=1, angle=-90):
+    def _create_output_img(self, frame, proj_num=4, y_offset_ratio=1, angle=90):
         """Create projections rotated by 'angle' deg. CCW
         Args:
             frame -- processed frame
@@ -193,12 +193,14 @@ class Ghost(object):
             # Black-out foreground in ROI
             roi_bg = apply_mask(roi, mask_inv)
             # Add projection to ROI background
-            dst = cv2.add(roi_bg, projection)
+            projection = cv2.add(roi_bg, projection)
             # Put ROI on output_img, in place
             output_img[frame_y : frame_y + frame_height, \
-                        frame_x : frame_x + frame_width] = dst
+                        frame_x : frame_x + frame_width] = projection
             output_img = rotate(output_img, angle, self.scr_centre_x, self.scr_centre_y)
-        return output_img
+            # Copy Lower Triangle of matrix to Upper Triangle (2x projections)
+            img_lower_triangle = np.tril(output_img)
+        return cv2.add(img_lower_triangle, cv2.flip(img_lower_triangle, -1)) #output_img
 
     def _process_key(self, key_pressed, start):
         """Method called from while loop in run(). Porcesses the key pressed.
@@ -229,6 +231,8 @@ class Ghost(object):
 if __name__ == '__main__':
 
     import cProfile
+    import pstats
+
     #ghost = Ghost('/home/chip/pythoncourse/hologram2/test2.mp4')
     ghost = Ghost(0)
 
@@ -236,4 +240,8 @@ if __name__ == '__main__':
     #ghost.set_output(path+'/out.avi')
 
     cProfile.run('ghost.run()')
+    #stats = pstats.Stats('ghost.stats')
+    #stats.strip_dirs()
+    #stats.sort_stats('cumulative')
+    #stats.print_stats()
     #ghost.run()
