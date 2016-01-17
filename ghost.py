@@ -16,7 +16,7 @@ Output -- monitor, VLC stream or video file
 
 USAGE:
     'SETTINGS' window gives you ability to change different Ghost instance
-attributes. The final result is viewed on SCREEN window. You can switch it
+attributes. The final result is viewed on output_img window. You can switch it
 into Fullscreen mode by dragging it into desired monitor and pressing 'f' key.
 
 
@@ -61,24 +61,28 @@ class Ghost(object):
         self.height = self.cap.height           # Frame height
         self.width = self.cap.width             # Frame width
         self.scr_height = self.height * 2       # Scr height
-        self.scr_width = self.width * 2         # Scr width
-        self.scr_centre_x = self.width          # Scr centre y
+        self.scr_width = self.scr_height#self.width * 2         # Scr width
+        self.scr_centre_x = self.height#self.width          # Scr centre y
         self.scr_centre_y = self.height         # Scr centre x
-
+        self.ORD_DICT = {'q':ord('q'), \
+                         'd':ord('d'), \
+                         'f':ord('f'), \
+                         'o':ord('o'), \
+                         'r':ord('r')}
         self.face_ex = FaceExtraction(self.height, self.width)
         self.pos = {}                           # Dict with trackbars values
 #        self.pos['scr_width'] = self.width * 2  # A crutch to expand black area 
-                                                # around the SCREEN.
+                                                # around the output_img.
                                                 # (Not needed if we use VLC client.)
-        self.pos['m_cntr'] = 0                  # Centre of the mask in SCREEN
+        self.pos['m_cntr'] = 0                  # Centre of the mask in output_img
         self.pos['m_btm'] = 1                   # Mask bottom corner position
         self.pos['m_side'] = 1.5                # Mask side corners pos
-        self.pos['m_blend'] = 1                 # Centre of the mask in FRAME
+        self.pos['m_y_offset'] = 1              # Offset ratio of y mask coord.
         self.pos['i_x'] = int(self.width / 2)   # frame x pos
         self.pos['i_y'] = int(self.height / 2)  # frame y pos
         self.pos['scale'] = 1                   # frame scale factor
         self.pos['angle'] = 90                  # angle relation between projections
-        self.pos['projections'] = 4             # projections qty (def. 4)
+        self.pos['proj_num'] = 4                # projections qty (def. 4)
         self.pos['loop_video'] = 1              # on/off
         self.pos['tracking_on'] = 0             # FaceTracking on/off
         self.pos['gc_iters'] = 0                # GrabCut iterations
@@ -91,19 +95,19 @@ class Ghost(object):
         while self.cap.is_opened():
             start = time()
             frame = self.cap.next_frame()
-            # Create SCREEN with all settings/segmentations applied to frame
+            # Create output_img with all settings/segmentations applied to frame
             frame_mod = self._apply_settings(frame)
-            screen = self._create_screen(frame=frame_mod, \
-                                         projections=self.pos['projections'], \
-                                         blend=self.pos['m_blend'], \
+            output_img = self._create_output_img(frame=frame_mod, \
+                                         proj_num=self.pos['proj_num'], \
+                                         y_offset_ratio=self.pos['m_y_offset'], \
                                          angle=self.pos['angle'])
             if self.out.is_opened:               # Save video to output
-                self.out.write(screen)#self.out.write(scale(screen, 0.7))
+                self.out.write(output_img)#self.out.write(scale(output_img, 0.7))
 
             # Operation routines
-            self.gui.preview(screen)       # Preview into SCREEN window
+            self.gui.preview(output_img)       # Preview into output_img window
             key_pressed = 0xFF & cv2.waitKey(1)
-            if not self._process_key(key_pressed):
+            if not self._process_key(key_pressed, start):
                 break
             if self.gui.DEBUGGER_MODE:          # Shows debugger win if ON
                 frame = self._add_fps( frame, start )
@@ -154,6 +158,7 @@ class Ghost(object):
             else:
                 result = apply_mask(result, tr_mask)
         # Create triangle mask
+        # Add decorator here
         self.mask = create_triangle_mask(height=self.height, \
                                         width=self.width, \
                                         side=self.pos['m_side'], \
@@ -164,36 +169,38 @@ class Ghost(object):
         self.cap.loop_video = self.pos['loop_video']
         return result
 
-    def _create_screen(self, frame, projections=4, blend=1, angle=-90):
+    def _create_output_img(self, frame, proj_num=4, y_offset_ratio=1, angle=-90):
         """Create projections rotated by 'angle' deg. CCW
         Args:
             frame -- processed frame
-            projections -- projections qty
-            bleng -- mask
+            proj_num -- projections qty
+            y_offset_ratio -- mask y coord offset ratio
         Returns:
-            screen -- resulting screen.
+            output_img -- resulting output_img.
         """
-        # Create blank SCREEN
-        screen = np.zeros((self.scr_height, self.scr_width, 3), np.uint8)
-        p_height, p_width = frame.shape[:2]
-        x = self.scr_centre_x - p_width // 2
-        y = self.scr_centre_y - p_height * blend
+        # Create blank output_img
+        output_img = np.zeros((self.scr_height, self.scr_width, 3), np.uint8)
+        frame_height, frame_width = frame.shape[:2]             # Proj. dimentions
+        frame_x = self.scr_centre_x - frame_width // 2            # 
+        frame_y = self.scr_centre_y - frame_height * y_offset_ratio        # 
         # Create projection with triangle mask
         projection = apply_mask(frame, self.mask)
         mask_inv = cv2.bitwise_not(self.mask)
-        for i in range(projections):
+        for i in range(proj_num):
             #Extract ROI
-            roi = screen[y : y + p_height, x : x + p_width]
+            roi = output_img[frame_y : frame_y + frame_height, frame_x : \
+                                frame_x + frame_width]
             # Black-out foreground in ROI
             roi_bg = apply_mask(roi, mask_inv)
             # Add projection to ROI background
             dst = cv2.add(roi_bg, projection)
-            # Put ROI on SCREEN, in place
-            screen[y : y + p_height, x : x + p_width] = dst
-            screen = rotate(screen, angle, self.scr_centre_x, self.scr_centre_y)
-        return screen
+            # Put ROI on output_img, in place
+            output_img[frame_y : frame_y + frame_height, \
+                        frame_x : frame_x + frame_width] = dst
+            output_img = rotate(output_img, angle, self.scr_centre_x, self.scr_centre_y)
+        return output_img
 
-    def _process_key(self, key_pressed):
+    def _process_key(self, key_pressed, start):
         """Method called from while loop in run(). Porcesses the key pressed.
         returns 0 if EXIT button (def. 'q') is pressed. Else returns 1.
         Args:
@@ -202,28 +209,31 @@ class Ghost(object):
             1 -- take an action and go ahead i the loop
             0 -- take an action and BREAK the loop
         """
-        if key_pressed == ord('q'):         # Wait for 'q' to exit
+        if key_pressed == self.ORD_DICT['q']:         # Wait for 'q' to exit
             return 0
-        elif key_pressed == ord('d'):       # Debugger windows(on/off)
+        elif key_pressed == self.ORD_DICT['d']:       # Debugger windows(on/off)
             self.gui.toggle_debugger()
-        elif key_pressed == ord('f'):       # Fullscreen on/off
+        elif key_pressed == self.ORD_DICT['f']:       # Fullscreen on/off
             self.gui.toggle_fullscreen()
-        elif key_pressed == ord('o'):       # Set output file
+        elif key_pressed == self.ORD_DICT['o']:       # Set output file
             if self.cap.source != -1:       # Is NOT a video file
                 fps = int(round(1 / (time() - start)))
             else:
                 fps = self.cap.fps          # Use video file fps
             self.out.set_output(fps, self.scr_height, \
                                 self.scr_width)
-        elif key_pressed == ord('r'):       # Release output
+        elif key_pressed == self.ORD_DICT['r']:       # Release output
             self.out.release()
         return 1
 
 if __name__ == '__main__':
+
+    import cProfile
     #ghost = Ghost('/home/chip/pythoncourse/hologram2/test2.mp4')
     ghost = Ghost(0)
 
     #path = getcwd()
     #ghost.set_output(path+'/out.avi')
 
-    ghost.run()
+    cProfile.run('ghost.run()')
+    #ghost.run()

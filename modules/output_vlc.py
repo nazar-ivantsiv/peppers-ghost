@@ -9,8 +9,6 @@ import subprocess as sp
 FPS_CORRECTION = 8  # Decrease streaming fps (compensates fps drop when streaming started).
 
 VLC_BIN = 'cvlc'
-FILE_CACHING = 300      # 300
-NETWORK_CACHING = 1000   # 1000
 
 VIDEO_CODEC = 'mp4v'    # mp4v
 VIDEO_BITRATE = 1600     # 800
@@ -41,8 +39,6 @@ class Output(object):
         command_vlc = [VLC_BIN,
 '-',
 '-v',
-#'--file-caching={}'.format(FILE_CACHING),
-#'--network-caching={}'.format(NETWORK_CACHING),
 '--demux=rawvideo',
 '--rawvid-fps={}'.format(int(round(fps - FPS_CORRECTION))),
 '--rawvid-width={}'.format(scr_width),
