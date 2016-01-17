@@ -153,7 +153,7 @@ def translate(img, x_dest, y_dest):
     Returns:
         result -- translated img
     """
-    rows, cols = img.shape[:2]
+    height, width = img.shape[:2]
     M = np.float32([[1, 0, x_dest], [0, 1, y_dest]])
-    result = cv2.warpAffine(img, M, (cols, rows))
+    result = cv2.warpAffine(img, M, (width, height))
     return result
