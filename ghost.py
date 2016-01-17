@@ -31,6 +31,7 @@ Key 'r' - Release video output
 from __future__ import division
 from os import getcwd
 from time import time, sleep
+from datetime import datetime
 
 import numpy as np
 import cv2
@@ -64,6 +65,7 @@ class Ghost(object):
         self.scr_width = self.scr_height#self.width * 2         # Scr width
         self.scr_centre_x = self.height#self.width          # Scr centre y
         self.scr_centre_y = self.height         # Scr centre x
+        self.fps = self.cap.fps
         self.ORD_DICT = {'q':ord('q'), \
                          'd':ord('d'), \
                          'f':ord('f'), \
@@ -82,7 +84,7 @@ class Ghost(object):
         self.pos['i_y'] = int(self.height / 2)  # frame y pos
         self.pos['scale'] = 1                   # frame scale factor
         self.pos['angle'] = 90                  # angle relation between projections
-        self.pos['proj_num'] = 2                # projections qty (def. 4)
+        self.pos['proj_num'] = 1                # projections qty (def. 4)
         self.pos['loop_video'] = 1              # on/off
         self.pos['tracking_on'] = 0             # FaceTracking on/off
         self.pos['gc_iters'] = 0                # GrabCut iterations
@@ -92,8 +94,9 @@ class Ghost(object):
 
     def run(self):
         """Video processing."""
+        counter = 0
+        start = time()
         while self.cap.is_opened():
-            start = time()
             frame = self.cap.next_frame()
             # Create output_img with all settings/segmentations applied to frame
             frame_mod = self._apply_settings(frame)
@@ -107,12 +110,15 @@ class Ghost(object):
             # Operation routines
             self.gui.preview(output_img)       # Preview into output_img window
             key_pressed = 0xFF & cv2.waitKey(1)
-            if not self._process_key(key_pressed, start):
+            if not self._process_key(key_pressed):
                 break
             if self.gui.DEBUGGER_MODE:          # Shows debugger win if ON
-                frame = self._add_fps( frame, start )
+                frame = self._add_fps( frame )
                 frame = draw_rect( frame, self.face_ex.faces )
                 self.gui.debugger_show(frame, frame_mod)
+
+            self.fps = counter / (time() - start)
+            counter += 1
         self.stop()
 
     def stop(self):
@@ -121,9 +127,8 @@ class Ghost(object):
         self.out.release()
         self.gui.exit()
 
-    def _add_fps(self, frame, start):
-        fps = 1 / (time() - start)
-        cv2.putText(frame, 'fps: {0:.0f}'.format(fps), \
+    def _add_fps(self, frame):
+        cv2.putText(frame, 'fps: {0:.1f}'.format(self.fps), \
                     (10, self.cap.height - 50), cv2.FONT_HERSHEY_PLAIN, 3, \
                     (255,255,255), 2, cv2.LINE_AA)
         return frame
@@ -180,29 +185,21 @@ class Ghost(object):
         """
         # Create blank output_img
         output_img = np.zeros((self.scr_height, self.scr_width, 3), np.uint8)
-        frame_height, frame_width = frame.shape[:2]             # Proj. dimentions
-        frame_x = self.scr_centre_x - frame_width // 2            # 
-        frame_y = self.scr_centre_y - frame_height * y_offset_ratio        # 
-        # Create projection with triangle mask
+        # Calculate frame position in the output_img
+        frame_x = self.scr_centre_x - self.width // 2
+        frame_y = self.scr_centre_y - self.height * y_offset_ratio
+        # Apply triangle mask on projection
         projection = apply_mask(frame, self.mask)
-        mask_inv = cv2.bitwise_not(self.mask)
-        for i in range(proj_num):
-            #Extract ROI
-            roi = output_img[frame_y : frame_y + frame_height, frame_x : \
-                                frame_x + frame_width]
-            # Black-out foreground in ROI
-            roi_bg = apply_mask(roi, mask_inv)
-            # Add projection to ROI background
-            projection = cv2.add(roi_bg, projection)
-            # Put ROI on output_img, in place
-            output_img[frame_y : frame_y + frame_height, \
-                        frame_x : frame_x + frame_width] = projection
-            output_img = rotate(output_img, angle, self.scr_centre_x, self.scr_centre_y)
-            # Copy Lower Triangle of matrix to Upper Triangle (2x projections)
-            img_lower_triangle = np.tril(output_img)
-        return cv2.add(img_lower_triangle, cv2.flip(img_lower_triangle, -1)) #output_img
+        # Apply projection to Bottom Centre of output_img
+        output_img[frame_y : frame_y + self.height, \
+                    frame_x : frame_x + self.width] = projection
+        # Add Top projection
+        output_img = cv2.add(output_img, cv2.flip(output_img, -1))
+        # Add Left and Right projections
+        output_img = cv2.add(output_img, cv2.flip(cv2.transpose(output_img), 1))
+        return output_img
 
-    def _process_key(self, key_pressed, start):
+    def _process_key(self, key_pressed):
         """Method called from while loop in run(). Porcesses the key pressed.
         returns 0 if EXIT button (def. 'q') is pressed. Else returns 1.
         Args:
@@ -218,15 +215,12 @@ class Ghost(object):
         elif key_pressed == self.ORD_DICT['f']:       # Fullscreen on/off
             self.gui.toggle_fullscreen()
         elif key_pressed == self.ORD_DICT['o']:       # Set output file
-            if self.cap.source != -1:       # Is NOT a video file
-                fps = int(round(1 / (time() - start)))
-            else:
-                fps = self.cap.fps          # Use video file fps
-            self.out.set_output(fps, self.scr_height, \
+            self.out.set_output(self.cap.fps, self.scr_height, \
                                 self.scr_width)
         elif key_pressed == self.ORD_DICT['r']:       # Release output
             self.out.release()
         return 1
+
 
 if __name__ == '__main__':
 
