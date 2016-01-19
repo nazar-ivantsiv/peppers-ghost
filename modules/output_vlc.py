@@ -6,12 +6,11 @@ from . import cv2
 import subprocess as sp
 
 
-FPS_CORRECTION = 8  # Decrease streaming fps (compensates fps drop when streaming started).
-
 VLC_BIN = 'cvlc'
+FPS = 25
 
 VIDEO_CODEC = 'mp4v'    # mp4v
-VIDEO_BITRATE = 1600     # 800
+VIDEO_BITRATE = 4000     # 1600
 
 MUX = 'ts'
 DST = ':8080/'
@@ -29,18 +28,23 @@ class Output(object):
     def set_output(self, fps=None, scr_height=None, scr_width=None):
         """Define the codec and create VideoWriter object to output video.
         Args:
-            file_path -- not used in VLC streaming
+            fps -- frames per second
             scr_height -- 
             scr_width --
         Note:
             Heigh and width are flipped in this case (width, height).
             Not common to OpenCV.
         """
+
+        fps = 25
+
         command_vlc = [VLC_BIN,
 '-',
 '-v',
+'--file-caching=1000',
+'--network-caching=1000',
 '--demux=rawvideo',
-'--rawvid-fps={}'.format(int(round(fps - FPS_CORRECTION))),
+'--rawvid-fps={}'.format(FPS),
 '--rawvid-width={}'.format(scr_width),
 '--rawvid-height={}'.format(scr_height),
 '--rawvid-chroma=RV24',
@@ -55,7 +59,8 @@ class Output(object):
         ]
         if self._is_opened == False:
             print('\nStarting stream to {}:'.format(DST))
-            print('FPS rate:   {}'.format(fps - FPS_CORRECTION))
+            print('FPS rate:   {}'.format(FPS))
+            print('Bitraterate:   {}'.format(VIDEO_BITRATE))
             print('resolution: {} x {}'.format(scr_width, scr_height))
             self._pipe = sp.Popen( command_vlc , stdin=sp.PIPE, stderr=sp.STDOUT)
             self._is_opened = True

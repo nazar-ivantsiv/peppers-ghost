@@ -28,12 +28,13 @@ class Gui(object):
     """
     DEBUGGER_MODE = 0                           # Flag: debugger mode off
     C_HDR = 'SETTINGS'                          # Controls window header
-    S_HDR = 'SCREEN'                            # Screen window header
+    O_HDR = 'Output'                            # Output window header
 
     def __init__(self, height, width, pos):
         self.height = height
         self.width = width
         self.pos = pos                          # Trackbar positons dict
+        self.preview_on = True                      # Falg: show preview window
         self.fullscreen = not cv2.WINDOW_FULLSCREEN # Flag: fullscreen (off)
         self._debugger_off = not self.DEBUGGER_MODE # Flag: debugger status
 
@@ -42,7 +43,7 @@ class Gui(object):
             self._get_trackbar_values()
         
         cv2.namedWindow(self.C_HDR, cv2.WINDOW_NORMAL)
-        cv2.namedWindow(self.S_HDR, cv2.WINDOW_NORMAL)
+        cv2.namedWindow(self.O_HDR, cv2.WINDOW_NORMAL)
 #        cv2.createTrackbar('fit width', self.C_HDR, int(self.width * 2),\
 #                           self.width * 4, on_change)
         cv2.createTrackbar('mask centre', self.C_HDR, int(self.pos['m_cntr'] * 100),\
@@ -91,13 +92,17 @@ class Gui(object):
         self.pos['contrast'] = cv2.getTrackbarPos('contrast', self.C_HDR) / 10
         self.pos['brightness'] = cv2.getTrackbarPos('brightness', self.C_HDR)
 
-    def preview(self, screen):
-        cv2.imshow(self.S_HDR, screen)
+    def preview(self, output_img):
+        if self.preview_on:
+            cv2.imshow(self.O_HDR, output_img)
+
+    def toggle_preview(self):
+        self.preview_on = not self.preview_on
 
     def toggle_fullscreen(self):
         """Switches SCREEN window fullscreen mode on/off"""
         self.fullscreen = not self.fullscreen
-        cv2.setWindowProperty(self.S_HDR, cv2.WND_PROP_FULLSCREEN, \
+        cv2.setWindowProperty(self.O_HDR, cv2.WND_PROP_FULLSCREEN, \
                               self.fullscreen)
 
     def toggle_debugger(self):
@@ -108,7 +113,7 @@ class Gui(object):
         else:
             if not self._debugger_off:
                 cv2.destroyWindow('original')
-                cv2.destroyWindow('result')
+                #cv2.destroyWindow('result')
                 self._debugger_off = True
 
     def debugger_show(self, frame, frame_mod):
@@ -119,8 +124,8 @@ class Gui(object):
         """
         cv2.imshow('original', frame)
         cv2.moveWindow('original', 0, 0)
-        cv2.imshow('result', frame_mod)
-        cv2.moveWindow('result', 0, self.height + 50)
+        #cv2.imshow('result', frame_mod)
+        #cv2.moveWindow('result', 0, self.height + 50)
 
     def exit(self):
         cv2.destroyAllWindows()

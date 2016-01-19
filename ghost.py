@@ -32,11 +32,12 @@ from __future__ import division
 from os import getcwd
 from time import time, sleep
 from datetime import datetime
+import pdb
 
 import numpy as np
 import cv2
 
-from modules.capture import Capture
+from modules.capture_thread import Capture
 from modules.gui import Gui
 from modules.output_vlc import Output
 from modules.segmentation import FaceExtraction
@@ -70,7 +71,8 @@ class Ghost(object):
                          'd':ord('d'), \
                          'f':ord('f'), \
                          'o':ord('o'), \
-                         'r':ord('r')}
+                         'r':ord('r'), \
+                         'p':ord('p')}
         self.face_ex = FaceExtraction(self.height, self.width)
         self.pos = {}                           # Dict with trackbars values
 #        self.pos['scr_width'] = self.width * 2  # A crutch to expand black area 
@@ -91,11 +93,12 @@ class Ghost(object):
         self.pos['contrast'] = 1                # contrast adj.
         self.pos['brightness'] = 0              # brightness adj.
         self.gui = Gui(self.height, self.width, self.pos) # GUI instance
+        self.counter = 0                        # Frame counter
 
     def run(self):
         """Video processing."""
-        counter = 0
-        start = time()
+        self.start = time()
+        frame = self.cap.next_frame()
         while self.cap.is_opened():
             frame = self.cap.next_frame()
             # Create output_img with all settings/segmentations applied to frame
@@ -104,34 +107,41 @@ class Ghost(object):
                                          proj_num=self.pos['proj_num'], \
                                          y_offset_ratio=self.pos['m_y_offset'], \
                                          angle=self.pos['angle'])
-            if self.out.is_opened:               # Save video to output
-                self.out.write(output_img)#self.out.write(scale(output_img, 0.7))
+            if self.out.is_opened:               # Send output_img to output
+                self.out.write(output_img)
 
             # Operation routines
-            self.gui.preview(output_img)       # Preview into output_img window
-            key_pressed = 0xFF & cv2.waitKey(1)
+            if self.counter % 5 == 0:
+                # Display output_img and fps every 5 frames
+                self.print_fps(self.gui.C_HDR)
+                self.gui.preview(output_img)       # Preview into output_img window
+            key_pressed = cv2.waitKey(1) & 0xFF
             if not self._process_key(key_pressed):
                 break
-            if self.gui.DEBUGGER_MODE:          # Shows debugger win if ON
-                frame = self._add_fps( frame )
-                frame = draw_rect( frame, self.face_ex.faces )
-                self.gui.debugger_show(frame, frame_mod)
-
-            self.fps = counter / (time() - start)
-            counter += 1
+            self.counter += 1
+            self.end = time()
+            self.fps = self.calc_fps()
         self.stop()
+
+    def calc_fps(self):
+        fps = round(self.counter / (self.end - self.start), 2)
+        if self.counter == 100:
+            self.counter = 0
+            self.start = self.end
+        return fps
+
+    def print_fps(self, window_hrd='FPS'):
+        canvas = np.zeros((70, 500, 3), np.uint8)
+        cv2.putText(canvas, 'FPS: {0:.1f}'.format(self.fps), \
+                    (10, 50), cv2.FONT_HERSHEY_PLAIN, 3, \
+                    (255,255,255), 3, cv2.LINE_AA)
+        cv2.imshow(window_hrd, canvas)
 
     def stop(self):
         """Release input/output if job is finished. And exit GUI."""
         self.cap.release()
         self.out.release()
         self.gui.exit()
-
-    def _add_fps(self, frame):
-        cv2.putText(frame, 'fps: {0:.1f}'.format(self.fps), \
-                    (10, self.cap.height - 50), cv2.FONT_HERSHEY_PLAIN, 3, \
-                    (255,255,255), 2, cv2.LINE_AA)
-        return frame
 
     def _apply_settings(self, frame):
         """Apply custom settings received from GUI (in self.pos).
@@ -215,10 +225,12 @@ class Ghost(object):
         elif key_pressed == self.ORD_DICT['f']:       # Fullscreen on/off
             self.gui.toggle_fullscreen()
         elif key_pressed == self.ORD_DICT['o']:       # Set output file
-            self.out.set_output(self.cap.fps, self.scr_height, \
+            self.out.set_output(self.fps, self.scr_height, \
                                 self.scr_width)
         elif key_pressed == self.ORD_DICT['r']:       # Release output
             self.out.release()
+        elif key_pressed == self.ORD_DICT['p']:       # Preview on/off
+            self.gui.toggle_preview()
         return 1
 
 
@@ -234,8 +246,4 @@ if __name__ == '__main__':
     #ghost.set_output(path+'/out.avi')
 
     cProfile.run('ghost.run()')
-    #stats = pstats.Stats('ghost.stats')
-    #stats.strip_dirs()
-    #stats.sort_stats('cumulative')
-    #stats.print_stats()
     #ghost.run()
