@@ -23,7 +23,7 @@ class Capture(object):
             self.video_len = self._cap.get(cv2.CAP_PROP_FRAME_COUNT)
             self.cur_frame_num = self._cap.get(cv2.CAP_PROP_POS_FRAMES)
         self.stopped = False                    # If thread should be stopped
-        _ ,self.frame = self._cap.read()
+        self.grab ,self.frame = self._cap.read()
         # Create thread
         Thread(target=self.update, args=()).start() 
 

@@ -98,7 +98,6 @@ class Ghost(object):
     def run(self):
         """Video processing."""
         self.start = time()
-        frame = self.cap.next_frame()
         while self.cap.is_opened():
             frame = self.cap.next_frame()
             # Create output_img with all settings/segmentations applied to frame
@@ -111,10 +110,8 @@ class Ghost(object):
                 self.out.write(output_img)
 
             # Operation routines
-            if self.counter % 5 == 0:
-                # Display output_img and fps every 5 frames
-                self.print_fps(self.gui.C_HDR)
-                self.gui.preview(output_img)       # Preview into output_img window
+            self.print_fps(self.gui.C_HDR)
+            self.gui.preview(output_img)       # Preview into Output window
             key_pressed = cv2.waitKey(1) & 0xFF
             if not self._process_key(key_pressed):
                 break
@@ -224,9 +221,8 @@ class Ghost(object):
             self.gui.toggle_debugger()
         elif key_pressed == self.ORD_DICT['f']:       # Fullscreen on/off
             self.gui.toggle_fullscreen()
-        elif key_pressed == self.ORD_DICT['o']:       # Set output file
-            self.out.set_output(self.fps, self.scr_height, \
-                                self.scr_width)
+        elif key_pressed == self.ORD_DICT['o']:       # Set output
+            self.out.set_output(self.scr_height, self.scr_width)
         elif key_pressed == self.ORD_DICT['r']:       # Release output
             self.out.release()
         elif key_pressed == self.ORD_DICT['p']:       # Preview on/off

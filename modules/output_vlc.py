@@ -1,5 +1,6 @@
 from __future__ import division
-from time import time
+from time import time, sleep
+from threading import Thread
 
 from . import np
 from . import cv2
@@ -10,7 +11,7 @@ VLC_BIN = 'cvlc'
 FPS = 25
 
 VIDEO_CODEC = 'mp4v'    # mp4v
-VIDEO_BITRATE = 4000     # 1600
+VIDEO_BITRATE = 4000     # 4000
 
 MUX = 'ts'
 DST = ':8080/'
@@ -20,15 +21,11 @@ DST = ':8080/'
 class Output(object):
     """ """
     def __init__(self, dst=':8080/'):
-#        if dst != '127.0.0.1:8080':
-#            DST = dst
-        self._pipe = None
         self._is_opened = False
 
-    def set_output(self, fps=None, scr_height=None, scr_width=None):
+    def set_output(self, scr_height=None, scr_width=None):
         """Define the codec and create VideoWriter object to output video.
         Args:
-            fps -- frames per second
             scr_height -- 
             scr_width --
         Note:
@@ -36,13 +33,11 @@ class Output(object):
             Not common to OpenCV.
         """
 
-        fps = 25
-
         command_vlc = [VLC_BIN,
 '-',
 '-v',
-'--file-caching=1000',
-'--network-caching=1000',
+'--file-caching=1000',      # Check if really required
+'--network-caching=1000',   # Check if really required
 '--demux=rawvideo',
 '--rawvid-fps={}'.format(FPS),
 '--rawvid-width={}'.format(scr_width),
@@ -64,19 +59,37 @@ class Output(object):
             print('resolution: {} x {}'.format(scr_width, scr_height))
             self._pipe = sp.Popen( command_vlc , stdin=sp.PIPE, stderr=sp.STDOUT)
             self._is_opened = True
+            self.output_img = np.zeros((scr_height, scr_width, 3), np.uint8) # Just to initialise
+            # Create a thread for output loop
+            self._out = Thread(target=self.output, args=()).start() 
 
     @property
     def is_opened(self):
         return self._is_opened
 
+    def write(self, output_img):
+        self.output_img = output_img
 
-    def write(self, screen):
-        #rgb = cv2.cvtColor( screen, cv2.COLOR_BGR2RGB )
-        self._pipe.stdin.write( screen.tostring() )
-
+    def output(self):
+        """This method is launshed in separate thread 'self._out' to send 
+        frames to vlc with a stable fps, indeendent from capturing and
+        processing performance.
+        """
+        count = 0
+        delta = 1 / FPS
+        while self._is_opened:
+            start = time()
+            # Send the frame to VLC
+            self._pipe.stdin.write( self.output_img.tostring() )
+            # Calculate time spent to output the frame
+            diff = time() - start
+            if diff < delta:
+                # Wait remaining amount of time to produce correct FPS.
+                sleep(delta - diff)
+            count += 1
 
     def release(self):
         """Finish writing video."""
         if self._pipe != None:
-            self._pipe.terminate()
             self._is_opened = False
+            self._pipe.terminate()
