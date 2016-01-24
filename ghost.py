@@ -17,14 +17,16 @@ Output -- monitor, VLC stream or video file
 USAGE:
     'SETTINGS' window gives you ability to change different Ghost instance
 attributes. The final result is viewed on output_img window. You can switch it
-into Fullscreen mode by dragging it into desired monitor and pressing 'f' key.
+into Fullscreen mode by dragging it into desired monitor and pressing 'f' key, 
+then press 'm' to change the ratio.
 
 
 Key 'q' - To quit
-Key 'd' - Debugger windows (on/off)
 Key 'f' - Fullscreen mode (on/off)
 Key 'o' - Open video output (VLC stream or video file file)
 Key 'r' - Release video output
+Key 'p' - Previwe refresh (on/off)
+Key 'm' - Change monitor (changes ratio according to available monitors resolution)
 ==============================================================================
 """
 
@@ -60,23 +62,20 @@ class Ghost(object):
         self.out = Output()
         self.height = self.cap.height           # Frame height
         self.width = self.cap.width             # Frame width
-        self.scr_height = self.height * 2       # Scr height
-        self.scr_width = self.scr_height#self.width * 2         # Scr width
-        self.scr_centre_x = self.height#self.width          # Scr centre y
-        self.scr_centre_y = self.height         # Scr centre x
+        self.output_img_height = self.height * 2
+        self.output_img_width = self.output_img_height
+        self.output_img_centre_x = self.height
+        self.output_img_centre_y = self.height
         self.fps = self.cap.fps
         self.ORD_DICT = {'q':ord('q'), \
-                         'd':ord('d'), \
                          'f':ord('f'), \
                          'o':ord('o'), \
                          'r':ord('r'), \
-                         'p':ord('p')}
+                         'p':ord('p'), \
+                         'm':ord('m')}
         self.grab_cut = GrabCut(self.height, self.width)
         self.face_ex = None
         self.pos = {}                           # Dict with trackbars values
-#        self.pos['scr_width'] = self.width * 2  # A crutch to expand black area 
-                                                # around the output_img.
-                                                # (Not needed if we use VLC client.)
         self.pos['m_cntr'] = 0                  # Centre of the mask in output_img
         self.pos['m_btm'] = 1                   # Mask bottom corner position
         self.pos['m_side'] = 1.5                # Mask side corners pos
@@ -107,7 +106,6 @@ class Ghost(object):
                                          angle=self.pos['angle'])
             if self.out.is_opened:               # Send output_img to output
                 self.out.write(output_img)
-
             # Operation routines
             self.print_fps(self.gui.C_HDR)
             self.gui.preview(output_img)       # Preview into Output window
@@ -116,10 +114,10 @@ class Ghost(object):
                 break
             self.counter += 1
             self.end = time()
-            self.fps = self.calc_fps()
+            self.fps = self.get_fps()
         self.stop()
 
-    def calc_fps(self):
+    def get_fps(self):
         fps = round(self.counter / (self.end - self.start), 2)
         if self.counter == 100:
             self.counter = 0
@@ -176,8 +174,8 @@ class Ghost(object):
                                         side=self.pos['m_side'], \
                                         centre=self.pos['m_cntr'], \
                                         bottom=self.pos['m_btm'])
-#        self.scr_width = self.pos['scr_width']
-#        self.scr_centre_x = self.scr_width // 2
+#        self.output_img_width = self.pos['output_img_width']
+#        self.output_img_centre_x = self.output_img_width // 2
         self.cap.loop_video = self.pos['loop_video']
         return result
 
@@ -191,10 +189,10 @@ class Ghost(object):
             output_img -- resulting output_img.
         """
         # Create blank output_img
-        output_img = np.zeros((self.scr_height, self.scr_width, 3), np.uint8)
+        output_img = np.zeros((self.output_img_height, self.output_img_width, 3), np.uint8)
         # Calculate frame position in the output_img
-        frame_x = self.scr_centre_x - self.width // 2
-        frame_y = self.scr_centre_y - self.height * y_offset_ratio
+        frame_x = self.output_img_centre_x - self.width // 2
+        frame_y = self.output_img_centre_y - self.height * y_offset_ratio
         # Apply triangle mask on projection
         projection = apply_mask(frame, self.mask)
         # Apply projection to Bottom Centre of output_img
@@ -217,16 +215,16 @@ class Ghost(object):
         """
         if key_pressed == self.ORD_DICT['q']:         # Wait for 'q' to exit
             return 0
-        elif key_pressed == self.ORD_DICT['d']:       # Debugger windows(on/off)
-            self.gui.toggle_debugger()
         elif key_pressed == self.ORD_DICT['f']:       # Fullscreen on/off
             self.gui.toggle_fullscreen()
         elif key_pressed == self.ORD_DICT['o']:       # Set output
-            self.out.set_output(self.scr_height, self.scr_width)
+            self.out.set_output(self.output_img_height, self.output_img_width)
         elif key_pressed == self.ORD_DICT['r']:       # Release output
             self.out.release()
         elif key_pressed == self.ORD_DICT['p']:       # Preview on/off
             self.gui.toggle_preview()
+        elif key_pressed == self.ORD_DICT['m']:       # Change monitor (switch ratio)
+            self.gui.change_monitor()
         return 1
 
 
@@ -238,5 +236,5 @@ if __name__ == '__main__':
     #ghost = Ghost('/home/chip/pythoncourse/hologram2/test2.mp4')
     ghost = Ghost(0)
 
-    #cProfile.run('ghost.run()')
-    ghost.run()
+    cProfile.run('ghost.run()')
+#    ghost.run()
