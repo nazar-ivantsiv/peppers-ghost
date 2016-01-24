@@ -4,8 +4,52 @@ from . import np
 from modules.im_trans import img_to_gray
 from modules.im_trans import draw_ellipse
 
-class FaceExtraction(object):
-    """Face Detection mixed with GrabCut for Face extraction.
+class GrabCut (object):
+    """GrabCut.
+    Args:
+        height -- input FRAME height
+        width -- input FRAME width
+    """
+
+    def __init__(self, height, width):
+        self.height = height
+        self.width = width
+        x = width // 2                           # Frame centre x
+        y = height // 2                          # Frame centre y
+        a = x // 2
+        self.gc_rect = (x - a, y - a, x, y)      # GrabCut working rectangle
+
+    def gc_mask(self, img, iters=2):
+        """GrabCut image segmentation. Background identification.
+        Args:
+            img -- image (frame) to processing
+            rect -- rectangular area to be segmented. Tuple (x, y, w, h)
+            iters -- algorithm iterations
+        Returns:
+            gc_mask -- mask of foreground
+        """
+        # Create additional args required for GrabCut
+        bgdModel = np.zeros((1, 65), np.float64)
+        fgdModel = np.zeros((1, 65), np.float64)
+        height, width = img.shape[:2]
+        # GrabCut uses downsampled image. (cv2.pyrDown == x0.5)
+        # All the dimensions scaled down by scale_factor.
+        scale_factor = 2
+        mask = np.zeros((height // scale_factor, width // scale_factor), np.uint8)
+        cv2.grabCut(img=cv2.pyrDown(img), \
+                    mask=mask, \
+                    rect=tuple(x // scale_factor for x in self.gc_rect), \
+                    bgdModel=bgdModel, 
+                    fgdModel=fgdModel, 
+                    iterCount=iters, \
+                    mode=cv2.GC_INIT_WITH_RECT)
+        # Substitutes all bg pixels(0,2) with sure background (0)
+        gc_mask = np.where((mask == 2) | (mask == 0), 0, 1).astype('uint8') 
+        return cv2.pyrUp(gc_mask)
+
+
+class FaceDetection(object):
+    """Face Detection.
     Args:
         height -- input FRAME height
         width -- input FRAME width
@@ -46,34 +90,6 @@ class FaceExtraction(object):
         fgmask = draw_ellipse(fgmask, self.faces)
         fgmask = img_to_gray(fgmask)
         return fgmask
-
-    def gc_mask(self, img, iters=2):
-        """GrabCut image segmentation. Background identification.
-        Args:
-            img -- image (frame) to processing
-            rect -- rectangular area to be segmented. Tuple (x, y, w, h)
-            iters -- algorithm iterations
-        Returns:
-            gc_mask -- mask of foreground
-        """
-        # Create additional args required for GrabCut
-        bgdModel = np.zeros((1, 65), np.float64)
-        fgdModel = np.zeros((1, 65), np.float64)
-        height, width = img.shape[:2]
-        # GrabCut uses downsampled image. (cv2.pyrDown == x0.5)
-        # All the dimensions scaled down by scale_factor.
-        scale_factor = 2
-        mask = np.zeros((height // scale_factor, width // scale_factor), np.uint8)
-        cv2.grabCut(img=cv2.pyrDown(img), \
-                    mask=mask, \
-                    rect=tuple(x // scale_factor for x in self.gc_rect), \
-                    bgdModel=bgdModel, 
-                    fgdModel=fgdModel, 
-                    iterCount=iters, \
-                    mode=cv2.GC_INIT_WITH_RECT)
-        # Substitutes all bg pixels(0,2) with sure background (0)
-        gc_mask = np.where((mask == 2) | (mask == 0), 0, 1).astype('uint8') 
-        return cv2.pyrUp(gc_mask)
 
     def _detect_faces(self, img):
         """Detects faces on the image.

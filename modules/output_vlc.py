@@ -22,6 +22,7 @@ class Output(object):
     """ """
     def __init__(self, dst=':8080/'):
         self._is_opened = False
+        self._pipe = None
 
     def set_output(self, scr_height=None, scr_width=None):
         """Define the codec and create VideoWriter object to output video.
@@ -87,9 +88,9 @@ class Output(object):
                 # Wait remaining amount of time to produce correct FPS.
                 sleep(delta - diff)
             count += 1
+        self._pipe.terminate()
 
     def release(self):
         """Finish writing video."""
         if self._pipe != None:
             self._is_opened = False
-            self._pipe.terminate()

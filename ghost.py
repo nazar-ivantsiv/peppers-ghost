@@ -29,10 +29,7 @@ Key 'r' - Release video output
 """
 
 from __future__ import division
-from os import getcwd
 from time import time, sleep
-from datetime import datetime
-import pdb
 
 import numpy as np
 import cv2
@@ -40,7 +37,8 @@ import cv2
 from modules.capture_thread import Capture
 from modules.gui import Gui
 from modules.output_vlc import Output
-from modules.segmentation import FaceExtraction
+from modules.segmentation import GrabCut
+from modules.segmentation import FaceDetection
 from modules.im_trans import apply_mask
 from modules.im_trans import brightness_contrast
 from modules.im_trans import create_triangle_mask
@@ -73,7 +71,8 @@ class Ghost(object):
                          'o':ord('o'), \
                          'r':ord('r'), \
                          'p':ord('p')}
-        self.face_ex = FaceExtraction(self.height, self.width)
+        self.grab_cut = GrabCut(self.height, self.width)
+        self.face_ex = None
         self.pos = {}                           # Dict with trackbars values
 #        self.pos['scr_width'] = self.width * 2  # A crutch to expand black area 
                                                 # around the output_img.
@@ -161,14 +160,15 @@ class Ghost(object):
                                    self.pos['brightness'])
         # Apply face detection mask (if ON)
         if self.pos['tracking_on']:
+            if self.face_ex == None:
+                self.face_ex = FaceDetection(self.height, self.width)
             tr_mask = self.face_ex.track_faces(frame)
-            # GrabCut face(fg) extraction
-            if self.pos['gc_iters'] > 0:
-                gc_mask = self.face_ex.gc_mask( img=frame, \
-                                                iters=self.pos['gc_iters'])
-                result = apply_mask(result, gc_mask)
-            else:
-                result = apply_mask(result, tr_mask)
+            result = apply_mask(result, tr_mask)
+        # GrabCut face(fg) extraction
+        if self.pos['gc_iters'] > 0:
+            gc_mask = self.grab_cut.gc_mask( img=frame, \
+                                             iters=self.pos['gc_iters'])
+            result = apply_mask(result, gc_mask)
         # Create triangle mask
         # Add decorator here
         self.mask = create_triangle_mask(height=self.height, \
@@ -238,8 +238,5 @@ if __name__ == '__main__':
     #ghost = Ghost('/home/chip/pythoncourse/hologram2/test2.mp4')
     ghost = Ghost(0)
 
-    #path = getcwd()
-    #ghost.set_output(path+'/out.avi')
-
-    cProfile.run('ghost.run()')
-    #ghost.run()
+    #cProfile.run('ghost.run()')
+    ghost.run()

@@ -64,7 +64,7 @@ class Capture(object):
                 self._cap.set(cv2.CAP_PROP_POS_FRAMES, 0)
         # retrieve recent frame from cap
         if self.grab:
-            _, self.frame = self._cap.retrieve()
+            self.grab, self.frame = self._cap.retrieve()
         return self.frame
 
     @property
