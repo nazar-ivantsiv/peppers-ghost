@@ -227,6 +227,7 @@ if __name__ == '__main__':
 #    import pstats
 
     #ghost = Ghost('/home/chip/pythoncourse/hologram2/test2.mp4')
+    #ghost = Ghost('/home/chip/pythoncourse/hologram2/out.avi')
     ghost = Ghost(0)
 
 #    cProfile.run('ghost.run()')

@@ -1,5 +1,5 @@
 from threading import Thread
-import logging
+from time import sleep
 
 from . import cv2
 from . import np
@@ -22,8 +22,9 @@ class Capture(object):
             self._loop_video = True
             self.video_len = self._cap.get(cv2.CAP_PROP_FRAME_COUNT)
             self.cur_frame_num = self._cap.get(cv2.CAP_PROP_POS_FRAMES)
+            self.delay = 1 / float(self.fps)
         self.stopped = False                    # If thread should be stopped
-        self.grab ,self.frame = self._cap.read()
+        self.grab, self.frame = self._cap.read()
         # Create thread
         Thread(target=self.update, args=()).start() 
 
@@ -40,8 +41,20 @@ class Capture(object):
             # if the thread indicator variable is set, stop the thread
             if self.stopped:
                 break
-            # otherwise, GRAB the next frame from the stream
-            self.grab = self._cap.grab()
+            # Get cur frame num
+            self.cur_frame_num = self._cap.get(cv2.CAP_PROP_POS_FRAMES)
+            if self.source < 0:
+                # source is video file
+                sleep(self.delay)
+                if self.cur_frame_num == self.video_len:    
+                # reached the end of file -> goto first frame
+                    if self._loop_video:
+                        self._cap.set(cv2.CAP_PROP_POS_FRAMES, 0)
+                    else:
+                        self.stopped = True
+                        continue
+            # otherwise, READ the next frame from the stream
+            self.grab, self.frame = self._cap.read()
   
     def stop(self):
         # indicate that the thread should be stopped
@@ -55,16 +68,6 @@ class Capture(object):
         Updates cur_frame_num count.
         Loops video if _loop_video = True
         """
-        # Get cur frame num
-        self.cur_frame_num = self._cap.get(cv2.CAP_PROP_POS_FRAMES)
-        if self.source < 0:
-            # source is video file
-            if self.cur_frame_num == self.video_len:
-                # reached the end of file -> goto first frame
-                self._cap.set(cv2.CAP_PROP_POS_FRAMES, 0)
-        # retrieve recent frame from cap
-        if self.grab:
-            self.grab, self.frame = self._cap.retrieve()
         return self.frame
 
     @property
