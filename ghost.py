@@ -83,8 +83,6 @@ class Ghost(object):
         self.pos['i_x'] = int(self.width / 2)   # frame x pos
         self.pos['i_y'] = int(self.height / 2)  # frame y pos
         self.pos['scale'] = 1                   # frame scale factor
-        self.pos['angle'] = 90                  # angle relation between projections
-        self.pos['proj_num'] = 1                # projections qty (def. 4)
         self.pos['loop_video'] = 1              # on/off
         self.pos['tracking_on'] = 0             # FaceTracking on/off
         self.pos['gc_iters'] = 0                # GrabCut iterations
@@ -101,9 +99,7 @@ class Ghost(object):
             # Create output_img with all settings/segmentations applied to frame
             frame_mod = self._apply_settings(frame)
             output_img = self._create_output_img(frame=frame_mod, \
-                                         proj_num=self.pos['proj_num'], \
-                                         y_offset_ratio=self.pos['m_y_offset'], \
-                                         angle=self.pos['angle'])
+                                        y_offset_ratio=self.pos['m_y_offset'])
             if self.out.is_opened:               # Send output_img to output
                 self.out.write(output_img)
             # Operation routines
@@ -174,19 +170,16 @@ class Ghost(object):
                                         side=self.pos['m_side'], \
                                         centre=self.pos['m_cntr'], \
                                         bottom=self.pos['m_btm'])
-#        self.output_img_width = self.pos['output_img_width']
-#        self.output_img_centre_x = self.output_img_width // 2
         self.cap.loop_video = self.pos['loop_video']
         return result
 
-    def _create_output_img(self, frame, proj_num=4, y_offset_ratio=1, angle=90):
+    def _create_output_img(self, frame, y_offset_ratio=1):
         """Create projections rotated by 'angle' deg. CCW
         Args:
             frame -- processed frame
-            proj_num -- projections qty
             y_offset_ratio -- mask y coord offset ratio
         Returns:
-            output_img -- resulting output_img.
+            output_img -- resulting img.
         """
         # Create blank output_img
         output_img = np.zeros((self.output_img_height, self.output_img_width, 3), np.uint8)
@@ -210,7 +203,7 @@ class Ghost(object):
         Args:
             key_pressed -- ord value of key pressed
         Reurns:
-            1 -- take an action and go ahead i the loop
+            1 -- take an action and go ahead in the loop
             0 -- take an action and BREAK the loop
         """
         if key_pressed == self.ORD_DICT['q']:         # Wait for 'q' to exit
@@ -230,11 +223,11 @@ class Ghost(object):
 
 if __name__ == '__main__':
 
-    import cProfile
-    import pstats
+#    import cProfile
+#    import pstats
 
     #ghost = Ghost('/home/chip/pythoncourse/hologram2/test2.mp4')
     ghost = Ghost(0)
 
-    cProfile.run('ghost.run()')
-#    ghost.run()
+#    cProfile.run('ghost.run()')
+    ghost.run()

@@ -12,7 +12,6 @@ class Gui(object):
         width -- output SCREEN original width
         pos -- reference to dict with default trackbar values (from ghost.py)
     Returns:
-        self.pos['scr_width'] -- screen width
         self.pos['m_cntr'] -- mask vertical position on frame
         self.pos['m_btm'] -- mask bottom edge position
         self.pos['m_side'] -- distance between mask side corners
@@ -20,8 +19,6 @@ class Gui(object):
         self.pos['i_x'] -- frame x pos
         self.pos['i_y'] -- frame y pos
         self.pos['scale'] -- frame scale factor
-        self.pos['angle'] -- angle relation between projections
-        self.pos['proj_num'] -- projections qty (def. 4)
         self.pos['loop_video'] -- on/off
         self.pos['tracking_on'] -- FaceTracking on/off
         self.pos['gc_iters'] -- GrabCut iterations
@@ -61,8 +58,6 @@ class Gui(object):
         cv2.createTrackbar('image y', self.C_HDR, int(self.height / 2), \
                            self.height, on_change)
         cv2.createTrackbar('scale', self.C_HDR, int(self.pos['scale'] * 100), 300, on_change)
-        cv2.createTrackbar('angle', self.C_HDR, self.pos['angle'], 90, on_change)
-        cv2.createTrackbar('projections', self.C_HDR, self.pos['proj_num'], 10, on_change)
         cv2.createTrackbar('loop video', self.C_HDR, self.pos['loop_video'], 1, on_change)
         cv2.createTrackbar('Track Faces', self.C_HDR, self.pos['tracking_on'], 1, on_change)
         cv2.createTrackbar('  GrabCut iters', self.C_HDR, self.pos['gc_iters'], 5, on_change)
@@ -84,8 +79,6 @@ class Gui(object):
         self.pos['i_y'] = cv2.getTrackbarPos('image y', self.C_HDR) - \
                                                 self.height / 2
         self.pos['scale'] = cv2.getTrackbarPos('scale', self.C_HDR) / 100 or 0.01
-        self.pos['angle'] = cv2.getTrackbarPos('angle', self.C_HDR)
-        self.pos['proj_num'] = cv2.getTrackbarPos('projections', self.C_HDR)
         self.pos['loop_video'] = cv2.getTrackbarPos('loop video', self.C_HDR)
         self.pos['tracking_on'] = cv2.getTrackbarPos('Track Faces', self.C_HDR)
         self.pos['gc_iters'] = cv2.getTrackbarPos('  GrabCut iters', self.C_HDR)
@@ -115,28 +108,6 @@ class Gui(object):
         cv2.setWindowProperty(self.O_HDR, cv2.WND_PROP_FULLSCREEN, \
                               self.fullscreen)
 
-    def toggle_debugger(self):
-        """Switches DEBUGGER windows on/off"""
-        self.DEBUGGER_MODE = not self.DEBUGGER_MODE
-        if self.DEBUGGER_MODE:
-            self._debugger_off = False
-        else:
-            if not self._debugger_off:
-                cv2.destroyWindow('original')
-                #cv2.destroyWindow('result')
-                self._debugger_off = True
-
-    def debugger_show(self, frame, frame_mod):
-        """Adds two additional windows for debugging and adjustments.
-        Args:
-            frame -- original frame from video input, with face highlited
-            frame_mod -- processed frame
-        """
-        cv2.imshow('original', frame)
-        cv2.moveWindow('original', 0, 0)
-        #cv2.imshow('result', frame_mod)
-        #cv2.moveWindow('result', 0, self.height + 50)
-
     def exit(self):
         cv2.destroyAllWindows()
 
@@ -155,7 +126,6 @@ class Gui(object):
         if monitor.width > monitor.height:  
             monitor.ratio = monitor.width / monitor.height
             canvas_width = int(self.output_img_height * monitor.ratio)
-            print(canvas_width)
             monitor.canvas = \
                 np.zeros((self.output_img_height, canvas_width, 3), np.uint8)
             monitor.x = (canvas_width - self.output_img_height) // 2
