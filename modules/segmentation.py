@@ -1,3 +1,4 @@
+
 from . import cv2
 from . import np
 
@@ -14,10 +15,16 @@ class GrabCut (object):
     def __init__(self, height, width):
         self.height = height
         self.width = width
-        x = width // 2                           # Frame centre x
-        y = height // 2                          # Frame centre y
-        a = x // 2
-        self.gc_rect = (x - a, y - a, x, y)      # GrabCut working rectangle
+        # x = width // 2   # Frame centre x
+        # y = height // 2  # Frame centre y
+        # a = x // 2
+        gmask_scale = 0.7
+        gx = int(width*(1-gmask_scale)/2)
+        gy = int(height*(1-gmask_scale)/2) - 50
+        print 'w = ', width, 'height = ', height
+        print 'grab width = ', width*gmask_scale, 'grab height = ', height*gmask_scale
+        print 'gx = ', gx, 'gy = ', gy
+        self.gc_rect = (gx, gy, int(width*gmask_scale), int(height*gmask_scale))      # GrabCut working rectangle
 
     def gc_mask(self, img, iters=2):
         """GrabCut image segmentation. Background identification.
