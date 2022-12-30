@@ -6,5 +6,4 @@ opencv=3.0.0-dev
 cvlc=2.2.1 (for video streaming only)  
 python2.7 (32bit)  
 
-Decks:
-https://slides.com/nazarivantsiv/deck/edit
+https://slides.com/nazarivantsiv/deck
